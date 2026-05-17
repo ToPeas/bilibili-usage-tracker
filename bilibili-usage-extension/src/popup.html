@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bilibili Usage</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>今日 B 站</h1>
+        <strong id="total">0 分钟</strong>
+      </header>
+      <p id="active"></p>
+      <ul id="hosts"></ul>
+      <section class="upload-card">
+        <div>
+          <h2>今日上传</h2>
+          <p id="upload-status">检查中...</p>
+        </div>
+        <button id="upload-now">立即补传</button>
+      </section>
+      <section class="debug-card">
+        <h2>计时状态</h2>
+        <p id="tracking-debug">检查中...</p>
+      </section>
+      <section class="recent">
+        <div class="section-title">
+          <h2>最近 7 天</h2>
+          <span id="database-label">未配置 D1</span>
+        </div>
+        <div id="recent-chart" class="chart"></div>
+        <div id="device-detail" class="device-detail"></div>
+        <ul id="recent-days"></ul>
+        <p id="recent-message" role="status"></p>
+      </section>
+      <button id="open-options" class="ghost-button">设置 D1 连接</button>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Bilibili Usage Tracker icon">
+  <defs>
+    <linearGradient id="bg" x1="20" y1="12" x2="112" y2="116" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#21b7ff"/>
+      <stop offset="0.48" stop-color="#2f7bff"/>
+      <stop offset="1" stop-color="#ff5aa5"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="35" y1="34" x2="96" y2="95" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#edf7ff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#133b7a" flood-opacity="0.26"/>
+    </filter>
+  </defs>
+
+  <rect width="128" height="128" rx="30" fill="url(#bg)"/>
+  <path d="M29 22l12 12M99 22L87 34" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity="0.9"/>
+
+  <rect x="24" y="32" width="80" height="72" rx="20" fill="url(#panel)" filter="url(#shadow)"/>
+  <rect x="34" y="43" width="60" height="50" rx="13" fill="#10223f"/>
+
+  <path d="M58 56v24l21-12-21-12z" fill="#ffffff"/>
+
+  <rect x="42" y="72" width="7" height="13" rx="3.5" fill="#20c7ff"/>
+  <rect x="53" y="66" width="7" height="19" rx="3.5" fill="#7bdcff"/>
+  <rect x="78" y="62" width="7" height="23" rx="3.5" fill="#ff6aa8"/>
+
+  <circle cx="43" cy="54" r="4" fill="#21b7ff"/>
+  <circle cx="85" cy="54" r="4" fill="#ff75b3"/>
+
+  <path d="M42 104h44" stroke="#ffffff" stroke-width="8" stroke-linecap="round" opacity="0.82"/>
+  <path d="M93 82c7 3 12 10 12 18" stroke="#ffffff" stroke-width="6" stroke-linecap="round" opacity="0.72"/>
+</svg>

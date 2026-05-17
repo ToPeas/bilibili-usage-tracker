@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bilibili Usage 设置</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main>
+      <h1>Bilibili Usage 设置</h1>
+      <form id="settings-form">
+        <label class="field-row">
+          <span>Account ID</span>
+          <input id="account-id" name="accountId" type="text" placeholder="32 位 Account ID" required>
+        </label>
+        <label class="field-row">
+          <span>Database ID</span>
+          <input id="database-id" name="databaseId" type="text" placeholder="D1 数据库 UUID" required>
+        </label>
+        <label class="field-row">
+          <span>API Token</span>
+          <input id="cloudflare-api-token" name="cloudflareApiToken" type="password" autocomplete="off" required>
+        </label>
+        <label class="field-row">
+          <span>Device ID</span>
+          <input id="device-id" name="deviceId" type="text" required>
+        </label>
+        <label class="field-row">
+          <span>Device Alias</span>
+          <input id="device-alias" name="deviceAlias" type="text" placeholder="例如 MacBook / Orion">
+        </label>
+        <label class="field-row">
+          <span>App Version</span>
+          <input id="app-version" name="appVersion" type="text" value="1.0.0">
+        </label>
+        <div class="actions">
+          <button type="submit">保存</button>
+          <button type="button" id="test-d1">测试 D1 读写</button>
+          <button type="button" id="upload-now">立即补传</button>
+        </div>
+      </form>
+      <p id="message" role="status"></p>
+      <section>
+        <h2>最近上报</h2>
+        <ul id="upload-log"></ul>
+      </section>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>
