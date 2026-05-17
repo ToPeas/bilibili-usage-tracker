@@ -6,6 +6,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.Calendar;
@@ -69,9 +70,24 @@ public class DailyUploadReceiver extends BroadcastReceiver {
             int uploaded = 0;
             int skippedEmpty = 0;
             for (JSONObject payload : payloads) {
-                if (payload.getLong("totalMs") <= 0L) {
+                long total = payload.optLong("totalMs", 0L);
+                long hoursSum = 0L;
+                JSONArray hoursArr = payload.optJSONArray("hours");
+                if (hoursArr != null) {
+                    for (int i = 0; i < hoursArr.length(); i++) {
+                        hoursSum += hoursArr.optJSONObject(i) == null ? 0L
+                                : hoursArr.optJSONObject(i).optLong("durationMs", 0L);
+                    }
+                }
+                // 任何一个渠道有数据就上传。queryEvents 拿到的 hours 可能比
+                // queryAndAggregateUsageStats 拿到的 daily total 更及时（未 flush bucket 仍可用）。
+                if (total <= 0L && hoursSum <= 0L) {
                     skippedEmpty += 1;
                     continue;
+                }
+                // 如果 daily total 为 0 但 hours 有数，用 hoursSum 补上（保证今日会被上传且总计有值）
+                if (total <= 0L && hoursSum > 0L) {
+                    payload.put("totalMs", hoursSum);
                 }
                 client.upload(payload);
                 uploaded += 1;

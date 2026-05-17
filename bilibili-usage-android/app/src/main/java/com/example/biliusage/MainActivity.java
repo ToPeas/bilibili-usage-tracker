@@ -789,7 +789,7 @@ public class MainActivity extends android.app.Activity {
                 );
                 long localTotal = 0L;
                 if (local != null) {
-                    for (long v : local.byHour) localTotal += v;
+                    localTotal = local.totalBundleMs();
                 }
                 if (localTotal > 0L) {
                     String selfId = settings.deviceId;
@@ -828,10 +828,17 @@ public class MainActivity extends android.app.Activity {
         }
 
         currentDays = buckets;
+        // 排序：旧 → 新（左 → 右），使「今天」永远在最右，符合直觉
+        currentDays.sort(new Comparator<UsageChartView.DayBucket>() {
+            @Override
+            public int compare(UsageChartView.DayBucket a, UsageChartView.DayBucket b) {
+                return a.date.compareTo(b.date);
+            }
+        });
 
         runOnUiThread(() -> {
             chart.setDays(currentDays);
-            // 默认选中「今天」（范围末尾），让用户一进来就看到今日详情。
+            // 默认选中「今天」（最右），让用户一进来就看到今日详情。
             int idx = currentDays.isEmpty() ? -1 : currentDays.size() - 1;
             chart.setSelectedIndex(idx);
             updateRangeTabsUi();

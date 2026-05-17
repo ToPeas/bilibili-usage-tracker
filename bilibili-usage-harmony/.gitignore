@@ -1,0 +1,15 @@
+/node_modules
+/oh_modules
+/local.properties
+/.idea
+/.cxx
+/.test
+/build
+/.preview
+/.hvigor
+/.cache
+/.deveco
+/.clangd
+/.history
+*.iml
+.DS_Store

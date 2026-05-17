@@ -548,13 +548,11 @@ async function getRecentUsage(rangeDays) {
 }
 
 /**
- * 拉取某天的「24 小时分布 + 各设备分布」。返回：
+ * 拉取某天的各设备分布。返回：
  * {
  *   ok, date,
  *   totalMs,
- *   devices: [{deviceId, deviceAlias, totalMs, uploadedAt}],
- *   hours: [{hour, durationMs}] // 长度 24，按 device 求和
- *   hoursByDevice: { deviceId: [{hour, durationMs}] }
+ *   devices: [{deviceId, deviceAlias, totalMs, uploadedAt}]
  * }
  */
 async function getDayDetail(date) {
@@ -582,16 +580,6 @@ async function getDayDetail(date) {
   });
   if (!dailyResp.ok) return { ok: false, error: dailyResp.error };
 
-  const hoursResp = await queryD1(settings, {
-    sql: `
-      SELECT device_id AS deviceId, hour, duration_ms AS durationMs
-      FROM usage_hours
-      WHERE date = ?
-    `,
-    params: [date]
-  });
-  if (!hoursResp.ok) return { ok: false, error: hoursResp.error };
-
   const devices = dailyResp.rows.map(row => {
     const sourceTag = String(row.source || "").toLowerCase();
     const sourceLabel = sourceTag === "app" || sourceTag === "android" ? "Android"
@@ -607,24 +595,11 @@ async function getDayDetail(date) {
     };
   });
 
-  const hoursTotal = Array.from({ length: 24 }, (_, hour) => ({ hour, durationMs: 0 }));
-  const hoursByDevice = {};
-  for (const row of hoursResp.rows) {
-    const hour = Math.max(0, Math.min(23, Math.floor(Number(row.hour) || 0)));
-    const ms = Number(row.durationMs || 0);
-    hoursTotal[hour].durationMs += ms;
-    const id = String(row.deviceId || "");
-    if (!hoursByDevice[id]) hoursByDevice[id] = Array.from({ length: 24 }, (_, h) => ({ hour: h, durationMs: 0 }));
-    hoursByDevice[id][hour].durationMs += ms;
-  }
-
   return {
     ok: true,
     date,
     totalMs: devices.reduce((s, d) => s + d.totalMs, 0),
-    devices,
-    hours: hoursTotal,
-    hoursByDevice
+    devices
   };
 }
 

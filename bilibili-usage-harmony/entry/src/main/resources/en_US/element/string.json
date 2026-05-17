@@ -1,0 +1,10 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "Bilibili usage tracking module" },
+    { "name": "EntryAbility_desc", "value": "Entry ability" },
+    { "name": "EntryAbility_label", "value": "Bilibili Usage" },
+    { "name": "perm_bundle_active_reason", "value": "Used to read daily foreground usage time of Bilibili app" },
+    { "name": "perm_internet_reason", "value": "Used to upload usage data to Cloudflare D1" },
+    { "name": "perm_network_reason", "value": "Used to check network availability before upload" }
+  ]
+}

@@ -4,7 +4,7 @@
  * 主流程：
  *   1) 拉取 background `get-status` 显示今日总时长 / 当前是否在 B 站 / D1 配置；
  *   2) 拉取 `get-recent-usage`（范围由用户选择：7/30/90/180 天）画趋势柱状图，支持悬停 tooltip；
- *   3) 点击某天 → 拉取 `get-day-detail` 画 24 小时分布柱状图 + 列出各设备时长；
+ *   3) 点击某天 → 拉取 `get-day-detail` 列出各设备时长；
  *   4) 提供「立即上传 / 测试 D1 / 打开设置」三个动作。
  */
 
@@ -21,6 +21,7 @@ const DPR = window.devicePixelRatio || 1;
 /** -------- DOM -------- */
 const $ = id => document.getElementById(id);
 const todayDurationEl = $("todayDuration");
+const todayAllDevicesEl = $("todayAllDevicesDuration");
 const stateChip = $("stateChip");
 const hostChip = $("hostChip");
 const dbChip = $("dbChip");
@@ -28,7 +29,6 @@ const rangeTabs = $("rangeTabs");
 const rangeSummary = $("rangeSummary");
 const trendCanvas = $("trendChart");
 const trendLegend = $("trendLegend");
-const hourCanvas = $("hourChart");
 const dayTitle = $("dayTitle");
 const daySub = $("daySub");
 const deviceList = $("deviceList");
@@ -37,8 +37,6 @@ const testBtn = $("testD1");
 const statusLine = $("uploadStatus");
 const lastUploadInfo = $("lastUploadInfo");
 const openOptionsBtns = [$("openOptions"), $("openOptions2")];
-const installHintCard = $("installHintCard");
-const installHint = $("installHint");
 const toggleDebugBtn = $("toggleDebug");
 const debugList = $("debugList");
 
@@ -57,6 +55,8 @@ const state = {
 async function bootstrap() {
   bindEvents();
   await refreshStatus();
+  // 打开 popup 时静默上传今天数据，让趋势和设备列表尽量展示最新值。
+  sendMessage({ type: "upload-now" }).then(() => refreshTrend()).catch(() => {});
   await refreshTrend();
   startStatusPolling();
   window.addEventListener("unload", stopStatusPolling, { once: true });
@@ -134,26 +134,7 @@ async function refreshStatus() {
   } else {
     lastUploadInfo.textContent = "尚未上传";
   }
-  renderInstallHint(status);
   renderDebug(status);
-}
-
-function renderInstallHint(status) {
-  if (!installHintCard) return;
-  const noToday = !status.todayTotalMs;
-  const debug = status.debug || {};
-  const noMessage = !debug.lastMessageAt;
-  const ignoredHost = debug.lastReason === "ignored host";
-  // 今天还没记到一点 + content script 从来没报过 -> 提示刷新 B 站页面
-  if (noToday && noMessage) {
-    installHint.textContent = "今天还没收到 B 站页面的任何上报。请刷新一下 B 站标签页，让 content script 注入后再回来看。";
-    installHintCard.hidden = false;
-  } else if (noToday && ignoredHost) {
-    installHint.textContent = "收到上报但不是 B 站域名。把活跃 tab 切到 bilibili.com/m.bilibili.com 再观察。";
-    installHintCard.hidden = false;
-  } else {
-    installHintCard.hidden = true;
-  }
 }
 
 function renderDebug(status) {
@@ -197,10 +178,22 @@ async function refreshTrend() {
     return;
   }
   state.days = response.days || [];
-  // 默认选最近一个有数据的日，否则今天
+  const todayKey = formatDateInTimeZoneJs(new Date());
+  // 把今天「全设备总计」打到 Hero 上
+  try {
+    const todayRow = state.days.find(d => d.date === todayKey);
+    if (todayAllDevicesEl) {
+      if (todayRow && todayRow.totalMs >= 0) {
+        todayAllDevicesEl.textContent = formatDuration(todayRow.totalMs || 0);
+      } else {
+        todayAllDevicesEl.textContent = "0秒";
+      }
+    }
+  } catch (_e) {}
+  // 打开弹窗时默认 active 今天；用户手动点过其他日期后，在当前范围内保持选择。
   if (!state.selectedDate || !state.days.some(d => d.date === state.selectedDate)) {
-    const lastWithData = [...state.days].reverse().find(d => d.totalMs > 0);
-    state.selectedDate = lastWithData?.date || state.days[state.days.length - 1]?.date || "";
+    const todayRow = state.days.find(d => d.date === todayKey);
+    state.selectedDate = todayRow?.date || todayKey;
   }
   drawTrend();
   await refreshDayDetail();
@@ -212,7 +205,6 @@ async function refreshDayDetail() {
     dayTitle.textContent = "暂无数据";
     daySub.textContent = "等待数据上传";
     deviceList.innerHTML = "";
-    drawHourChart([]);
     return;
   }
   const resp = await sendMessage({ type: "get-day-detail", date: state.selectedDate });
@@ -220,15 +212,13 @@ async function refreshDayDetail() {
     dayTitle.textContent = state.selectedDate;
     daySub.textContent = resp?.error || "查询失败";
     deviceList.innerHTML = "";
-    drawHourChart([]);
     return;
   }
   state.selectedDetail = resp;
   dayTitle.textContent = `${resp.date} · ${formatDuration(resp.totalMs)}`;
   daySub.textContent = resp.devices.length
-    ? `共 ${resp.devices.length} 台设备 · 点击柱子查看其他天`
+    ? `共 ${resp.devices.length} 台设备 · 点击趋势图查看其他天`
     : "这一天暂无设备上报";
-  drawHourChart(resp.hours || []);
   renderDeviceList(resp.devices || []);
 }
 
@@ -240,14 +230,13 @@ function renderDeviceList(devices) {
     deviceList.appendChild(li);
     return;
   }
-  const max = devices.reduce((m, d) => Math.max(m, d.totalMs), 1);
   for (const dev of devices) {
     const li = document.createElement("li");
-    const ratio = Math.round((dev.totalMs / max) * 100);
+    const srcTag = dev.sourceLabel || (dev.source === "app" || dev.source === "android" ? "Android" : "浏览器");
+    const srcColor = (dev.source === "app" || dev.source === "android") ? "#2f7bff" : "#FB7299";
     li.innerHTML = `
-      <span class="device-dot"></span>
-      <span class="device-name">${escapeHtml(dev.deviceAlias || dev.deviceId)}</span>
-      <span class="device-meta">${ratio}%</span>
+      <span class="device-dot" style="background:${srcColor}"></span>
+      <span class="device-name">${escapeHtml(dev.deviceAlias || dev.deviceId)} <span style="color:${srcColor};font-size:10px;padding:1px 6px;border-radius:6px;background:${srcColor}1a;margin-left:4px;">${escapeHtml(srcTag)}</span></span>
       <span class="device-time">${formatDuration(dev.totalMs)}</span>
     `;
     deviceList.appendChild(li);
@@ -325,121 +314,180 @@ function drawTrend(_unused, errorMsg) {
     return;
   }
 
-  const padding = { top: 24, right: 12, bottom: 24, left: 36 };
+  const padding = { top: 28, right: 14, bottom: 26, left: 54 };
   const innerW = w - padding.left - padding.right;
   const innerH = h - padding.top - padding.bottom;
-  const days = state.days; // 顺序：i=0 是今天最早，最后一个是最旧（getRecentUsage 返回顺序）
-  // 我们想让最旧 → 最新 从左到右
-  const sorted = [...days].sort((a, b) => (a.date < b.date ? -1 : 1));
-  const maxMs = Math.max(60_000, sorted.reduce((m, d) => Math.max(m, d.totalMs || 0), 0));
+  // 从旧到新从左到右
+  const sorted = [...state.days].sort((a, b) => (a.date < b.date ? -1 : 1));
+  const rawMax = sorted.reduce((m, d) => Math.max(m, d.totalMs || 0), 0);
+  const niceMax = niceCeilMs(Math.max(60_000, rawMax));
 
-  // 网格 + Y 轴标签
+  // 网格 + Y 轴标签（4 档）
   ctx.strokeStyle = GRID;
   ctx.lineWidth = 1;
   ctx.fillStyle = INK_MUTE;
   ctx.font = "10px sans-serif";
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
-  for (let i = 0; i <= 3; i++) {
-    const y = padding.top + (innerH * i) / 3;
+  for (let i = 0; i <= 4; i++) {
+    const y = padding.top + (innerH * i) / 4;
     ctx.beginPath();
     ctx.moveTo(padding.left, y);
     ctx.lineTo(padding.left + innerW, y);
     ctx.stroke();
-    const value = maxMs * (1 - i / 3);
-    ctx.fillText(formatDuration(value, true), padding.left - 6, y);
+    const value = niceMax * (1 - i / 4);
+    ctx.fillText(axisLabelMs(value), padding.left - 6, y);
   }
 
-  const slot = innerW / sorted.length;
-  const barW = Math.max(2, Math.min(18, slot * 0.6));
-
-  for (let i = 0; i < sorted.length; i++) {
+  const n = sorted.length;
+  const slot = innerW / Math.max(1, n);
+  const xs = [];
+  const ys = [];
+  for (let i = 0; i < n; i++) {
     const day = sorted[i];
-    const x = padding.left + slot * (i + 0.5) - barW / 2;
-    const ratio = day.totalMs / maxMs;
-    const barH = Math.max(2, ratio * innerH);
-    const y = padding.top + innerH - barH;
-    const isSelected = day.date === state.selectedDate;
-    ctx.fillStyle = isSelected ? PINK_DEEP : day.totalMs > 0 ? PINK : "#F2DCE5";
-    roundedRect(ctx, x, y, barW, barH, Math.min(4, barW / 2));
-    ctx.fill();
+    const x = padding.left + slot * (i + 0.5);
+    const ratio = (day.totalMs || 0) / niceMax;
+    let y = padding.top + innerH - ratio * innerH;
+    if (!day.totalMs) y = padding.top + innerH; // 零值贴基线
+    else y = Math.min(y, padding.top + innerH - 2);
+    xs.push(x);
+    ys.push(y);
   }
 
-  // X 轴标签（只展示稀疏几个）
+  // 选中点背景高亮
+  const selectedIdx = sorted.findIndex(d => d.date === state.selectedDate);
+  if (selectedIdx >= 0) {
+    ctx.fillStyle = "rgba(251,114,153,0.10)";
+    const sx = xs[selectedIdx];
+    ctx.fillRect(sx - slot / 2 + 2, padding.top - 4, slot - 4, innerH + 4);
+  }
+
+  // 填充面积 + 折线
+  if (n >= 1) {
+    const grad = ctx.createLinearGradient(0, padding.top, 0, padding.top + innerH);
+    grad.addColorStop(0, "rgba(251,114,153,0.30)");
+    grad.addColorStop(1, "rgba(251,114,153,0.02)");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(xs[0], padding.top + innerH);
+    ctx.lineTo(xs[0], ys[0]);
+    for (let i = 1; i < n; i++) {
+      const midX = (xs[i - 1] + xs[i]) / 2;
+      ctx.bezierCurveTo(midX, ys[i - 1], midX, ys[i], xs[i], ys[i]);
+    }
+    ctx.lineTo(xs[n - 1], padding.top + innerH);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = PINK;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(xs[0], ys[0]);
+    for (let i = 1; i < n; i++) {
+      const midX = (xs[i - 1] + xs[i]) / 2;
+      ctx.bezierCurveTo(midX, ys[i - 1], midX, ys[i], xs[i], ys[i]);
+    }
+    ctx.stroke();
+
+    // 点
+    for (let i = 0; i < n; i++) {
+      const isSel = i === selectedIdx;
+      ctx.fillStyle = "#FFFFFF";
+      ctx.beginPath();
+      ctx.arc(xs[i], ys[i], isSel ? 5 : (sorted[i].totalMs > 0 ? 3.5 : 2.2), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = isSel ? PINK_DEEP : (sorted[i].totalMs > 0 ? PINK : "#E9CCD7");
+      ctx.beginPath();
+      ctx.arc(xs[i], ys[i], isSel ? 3.5 : (sorted[i].totalMs > 0 ? 2.2 : 1.6), 0, Math.PI * 2);
+      ctx.fill();
+      if (isSel) {
+        ctx.strokeStyle = PINK_DEEP;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(xs[i], ys[i], 6, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+
+  // 选中点 tooltip
+  if (selectedIdx >= 0) {
+    const day = sorted[selectedIdx];
+    const label = `${shortDateLabel(day.date)} · ${formatDuration(day.totalMs)}`;
+    ctx.font = "11px sans-serif";
+    const tw = ctx.measureText(label).width + 16;
+    const th = 20;
+    let tx = xs[selectedIdx] - tw / 2;
+    tx = Math.max(padding.left, Math.min(padding.left + innerW - tw, tx));
+    let ty = ys[selectedIdx] - th - 8;
+    if (ty < 2) ty = 2;
+    ctx.fillStyle = "#18181B";
+    roundedRect(ctx, tx, ty, tw, th, 6);
+    ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, tx + tw / 2, ty + th / 2);
+  }
+
+  // X 轴标签
   ctx.fillStyle = INK_SOFT;
+  ctx.font = "10px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  const step = Math.max(1, Math.ceil(sorted.length / 6));
-  for (let i = 0; i < sorted.length; i += step) {
-    const x = padding.left + slot * (i + 0.5);
-    ctx.fillText(shortDateLabel(sorted[i].date), x, padding.top + innerH + 4);
+  const step = Math.max(1, Math.ceil(n / 6));
+  for (let i = 0; i < n; i += step) {
+    ctx.fillText(shortDateLabel(sorted[i].date), xs[i], padding.top + innerH + 4);
+  }
+  if (n > 0 && (n - 1) % step !== 0) {
+    ctx.fillText(shortDateLabel(sorted[n - 1].date), xs[n - 1], padding.top + innerH + 4);
   }
 
-  // 交互：把每个柱子的命中区记下来
-  trendCanvas._hitMap = { padding, innerW, innerH, slot, barW, sorted };
+  // 交互：点击点选中
+  trendCanvas._hitMap = { padding, innerW, innerH, slot, xs, ys, sorted };
 }
 
-function drawHourChart(hours) {
-  const ctx = hourCanvas.getContext("2d");
-  resizeCanvas(hourCanvas, ctx);
-  const w = hourCanvas.clientWidth;
-  const h = hourCanvas.clientHeight;
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillRect(0, 0, w, h);
+/**
+ * Y 轴友好的最大值取整。
+ * 策略：从 10s 到 24h 的一个授权步长表里选「刚好 ≥ ms 且 能被 4 整除」的那个。
+ * 这样看 10 分钟时刻度是 0/2.5m/5m/7.5m/10m，看 1 小时时是 0/15m/30m/45m/1h。
+ */
+function niceCeilMs(ms) {
+  if (ms <= 0) return 1000;
+  const steps = [
+    1000, 5000, 10_000, 20_000, 30_000,                       // 1s ~ 30s
+    60_000, 2 * 60_000, 4 * 60_000, 5 * 60_000, 10 * 60_000,  // 1m ~ 10m
+    20 * 60_000, 30 * 60_000,                                  // 20m / 30m
+    60 * 60_000, 2 * 60 * 60_000, 4 * 60 * 60_000,             // 1h / 2h / 4h
+    6 * 60 * 60_000, 8 * 60 * 60_000, 12 * 60 * 60_000,        // 6h / 8h / 12h
+    24 * 60 * 60_000                                           // 24h
+  ];
+  for (const s of steps) if (ms <= s) return s;
+  return Math.ceil(ms / 3600_000) * 3600_000;
+}
 
-  const padding = { top: 14, right: 8, bottom: 22, left: 30 };
-  const innerW = w - padding.left - padding.right;
-  const innerH = h - padding.top - padding.bottom;
-  if (!hours.length) {
-    ctx.fillStyle = INK_MUTE;
-    ctx.font = "12px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("尚无时段数据", w / 2, h / 2);
-    return;
+/** Y 轴紧凑标签（0 / 30秒 / 2.5分 / 5分 / 1小时 / 1小时30分 / …） */
+function axisLabelMs(ms) {
+  if (ms <= 0) return "0";
+  if (ms < 1000) return Math.round(ms) + "毫秒";
+  if (ms < 60_000) {
+    const s = ms / 1000;
+    if (Number.isInteger(s)) return s + "秒";
+    return s.toFixed(1) + "秒";
   }
-
-  const maxMs = Math.max(60_000, hours.reduce((m, h) => Math.max(m, h.durationMs), 0));
-  ctx.strokeStyle = GRID;
-  ctx.lineWidth = 1;
-  ctx.fillStyle = INK_MUTE;
-  ctx.font = "10px sans-serif";
-  ctx.textAlign = "right";
-  ctx.textBaseline = "middle";
-  for (let i = 0; i <= 2; i++) {
-    const y = padding.top + (innerH * i) / 2;
-    ctx.beginPath();
-    ctx.moveTo(padding.left, y);
-    ctx.lineTo(padding.left + innerW, y);
-    ctx.stroke();
-    const value = maxMs * (1 - i / 2);
-    ctx.fillText(formatDuration(value, true), padding.left - 4, y);
+  if (ms < 60 * 60_000) {
+    const m = ms / 60_000;
+    if (Number.isInteger(m)) return m + "分";
+    return m.toFixed(1) + "分";
   }
-
-  const slot = innerW / 24;
-  const barW = slot * 0.65;
-  for (let i = 0; i < 24; i++) {
-    const ms = hours[i]?.durationMs || 0;
-    const x = padding.left + slot * i + (slot - barW) / 2;
-    const ratio = ms / maxMs;
-    const barH = Math.max(0.5, ratio * innerH);
-    const y = padding.top + innerH - barH;
-    ctx.fillStyle = ms > 0 ? PINK : "#F2DCE5";
-    roundedRect(ctx, x, y, barW, barH, Math.min(3, barW / 2));
-    ctx.fill();
-  }
-
-  ctx.fillStyle = INK_SOFT;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-  ctx.font = "10px sans-serif";
-  const labels = [0, 6, 12, 18, 23];
-  for (const i of labels) {
-    const x = padding.left + slot * i + slot / 2;
-    ctx.fillText(`${i}:00`, x, padding.top + innerH + 4);
-  }
-
-  hourCanvas._hitMap = { padding, innerW, innerH, slot, barW, hours };
+  const totalMin = ms / 60_000;
+  const hh = Math.floor(totalMin / 60);
+  const rem = totalMin % 60;
+  if (rem === 0) return hh + "小时";
+  if (Number.isInteger(rem)) return hh + "小时" + rem + "分";
+  return hh + "小时" + rem.toFixed(1) + "分";
 }
 
 trendCanvas.addEventListener("click", event => {
@@ -471,20 +519,6 @@ trendCanvas.addEventListener("mousemove", event => {
   if (day) {
     trendCanvas.title = `${day.date} · ${formatDuration(day.totalMs)}`;
   }
-});
-
-hourCanvas.addEventListener("mousemove", event => {
-  const map = hourCanvas._hitMap;
-  if (!map) return;
-  const rect = hourCanvas.getBoundingClientRect();
-  const x = event.clientX - rect.left - map.padding.left;
-  if (x < 0 || x > map.innerW) {
-    hourCanvas.title = "";
-    return;
-  }
-  const i = Math.min(23, Math.max(0, Math.floor(x / map.slot)));
-  const ms = map.hours[i]?.durationMs || 0;
-  hourCanvas.title = `${i}:00 - ${i + 1}:00 · ${formatDuration(ms)}`;
 });
 
 /** ---------- helpers ---------- */
@@ -531,9 +565,17 @@ function formatDuration(ms, compact) {
 
 function shortDateLabel(dateStr) {
   // dateStr 形如 2026-05-17
-  const parts = dateStr.split("-");
-  if (parts.length !== 3) return dateStr;
-  return `${parts[1]}/${parts[2]}`;
+  if (!dateStr) return "";
+  const [, mm, dd] = dateStr.split("-");
+  return `${Number(mm)}/${Number(dd)}`;
+}
+
+function formatDateInTimeZoneJs(date) {
+  // 取本地时区 YYYY-MM-DD。background 依赖 DISPLAY_TIME_ZONE，这里兑底用本地。
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 }
 
 function escapeHtml(str) {

@@ -1,0 +1,13 @@
+{
+  "string": [
+    { "name": "module_desc", "value": "B站使用时长统计模块" },
+    { "name": "EntryAbility_desc", "value": "首页 Ability" },
+    { "name": "EntryAbility_label", "value": "B站使用时长" },
+    { "name": "perm_bundle_active_reason", "value": "用于统计 B 站 App 的每日前台使用时长" },
+    { "name": "perm_internet_reason", "value": "用于上传统计数据到云端 Cloudflare D1" },
+    { "name": "perm_network_reason", "value": "检查网络连接以决定是否上传" }
+  ],
+  "color": [
+    { "name": "start_window_background", "value": "#FFFFFF" }
+  ]
+}
