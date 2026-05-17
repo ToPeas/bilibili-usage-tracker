@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg_root">#F7F8FB</color>
+    <color name="bili_pink">#FB7299</color>
+    <color name="bili_pink_dark">#E15D88</color>
+    <color name="bili_pink_soft">#FFE3EC</color>
+    <color name="card_bg">#FFFFFFFF</color>
+    <color name="card_border">#EEF1F5</color>
+    <color name="danger">#EF4444</color>
+    <color name="input_bg">#F4F6FA</color>
+    <color name="input_border">#E2E8F0</color>
+    <color name="success">#16A34A</color>
+    <color name="text_muted">#94A3B8</color>
+    <color name="text_primary">#0F172A</color>
+    <color name="text_secondary">#64748B</color>
+    <color name="warning">#F59E0B</color>
+    <style name="AppTheme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">@color/bg_root</item>
+        <item name="android:navigationBarColor">@color/bg_root</item>
+        <item name="android:windowBackground">@color/bg_root</item>
+        <item name="android:colorAccent">@color/bili_pink</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textColorHint">@color/text_muted</item>
+    </style>
+</resources>

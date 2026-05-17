@@ -1,0 +1,26 @@
+R_DEF: Internal format may change without notice
+local
+color bg_root
+color bili_pink
+color bili_pink_dark
+color bili_pink_soft
+color card_bg
+color card_border
+color danger
+color input_bg
+color input_border
+color success
+color text_muted
+color text_primary
+color text_secondary
+color warning
+drawable btn_primary
+drawable btn_secondary
+drawable card_bg
+drawable chip_amber
+drawable chip_green
+drawable chip_pink
+drawable hero_bg
+drawable input_bg
+mipmap ic_launcher
+style AppTheme

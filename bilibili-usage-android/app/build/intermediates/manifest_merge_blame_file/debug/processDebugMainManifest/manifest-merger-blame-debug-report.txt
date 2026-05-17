@@ -1,0 +1,78 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.example.biliusage"
+4    android:versionCode="2"
+5    android:versionName="1.1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="34" />
+10
+11    <uses-permission android:name="android.permission.INTERNET" />
+11-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:2:5-67
+11-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:2:22-64
+12    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+12-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:3:5-81
+12-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:3:22-78
+13    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+13-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:4:5-78
+13-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:4:22-75
+14
+15    <application
+15-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:6:5-34:19
+16        android:allowBackup="true"
+16-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:7:9-35
+17        android:debuggable="true"
+18        android:extractNativeLibs="false"
+19        android:icon="@mipmap/ic_launcher"
+19-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:8:9-43
+20        android:label="Bilibili Usage"
+20-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:10:9-39
+21        android:roundIcon="@mipmap/ic_launcher"
+21-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:9:9-48
+22        android:theme="@style/AppTheme"
+22-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:11:9-40
+23        android:usesCleartextTraffic="false" >
+23-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:12:9-45
+24        <activity
+24-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:13:9-20:20
+25            android:name="com.example.biliusage.MainActivity"
+25-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:14:13-41
+26            android:exported="true" >
+26-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:15:13-36
+27            <intent-filter>
+27-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:16:13-19:29
+28                <action android:name="android.intent.action.MAIN" />
+28-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:17:17-69
+28-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:17:25-66
+29
+30                <category android:name="android.intent.category.LAUNCHER" />
+30-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:18:17-77
+30-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:18:27-74
+31            </intent-filter>
+32        </activity>
+33
+34        <receiver
+34-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:22:9-24:40
+35            android:name="com.example.biliusage.DailyUploadReceiver"
+35-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:23:13-48
+36            android:exported="false" />
+36-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:24:13-37
+37        <receiver
+37-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:26:9-33:20
+38            android:name="com.example.biliusage.BootReceiver"
+38-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:27:13-41
+39            android:enabled="true"
+39-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:28:13-35
+40            android:exported="true" >
+40-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:29:13-36
+41            <intent-filter>
+41-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:30:13-32:29
+42                <action android:name="android.intent.action.BOOT_COMPLETED" />
+42-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:31:17-79
+42-->/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:31:25-76
+43            </intent-filter>
+44        </receiver>
+45    </application>
+46
+47</manifest>

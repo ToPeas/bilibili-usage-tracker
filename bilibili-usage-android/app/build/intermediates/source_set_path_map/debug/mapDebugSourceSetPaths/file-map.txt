@@ -1,0 +1,7 @@
+com.example.biliusage.app-pngs-0 /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/build/generated/res/pngs/debug
+com.example.biliusage.app-resValues-1 /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/build/generated/res/resValues/debug
+com.example.biliusage.app-packageDebugResources-2 /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/build/intermediates/incremental/debug/packageDebugResources/merged.dir
+com.example.biliusage.app-packageDebugResources-3 /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/build/intermediates/incremental/debug/packageDebugResources/stripped.dir
+com.example.biliusage.app-debug-4 /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/build/intermediates/merged_res/debug/mergeDebugResources
+com.example.biliusage.app-debug-5 /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/debug/res
+com.example.biliusage.app-main-6 /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/res

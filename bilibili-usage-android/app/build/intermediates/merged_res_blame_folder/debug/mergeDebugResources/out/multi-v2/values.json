@@ -1,0 +1,45 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.example.biliusage.app-mergeDebugResources-2:/values/values.xml",
+            "map": [
+                {
+                    "source": "/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/res/values/colors.xml",
+                    "from": {
+                        "startLines": "6,2,3,4,7,8,16,18,19,14,12,10,11,15",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "198,55,99,148,240,284,557,599,642,473,427,331,378,515",
+                        "endColumns": "41,43,48,48,43,45,40,42,46,41,44,46,48,41",
+                        "endOffsets": "235,94,143,192,279,325,593,637,684,510,467,373,422,552"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6,7,8,9,10,11,12,13,14,15",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,97,141,190,239,283,329,370,413,460,502,547,594,643",
+                        "endColumns": "41,43,48,48,43,45,40,42,46,41,44,46,48,41",
+                        "endOffsets": "92,136,185,234,278,324,365,408,455,497,542,589,638,680"
+                    }
+                },
+                {
+                    "source": "/Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/res/values/styles.xml",
+                    "from": {
+                        "startLines": "1",
+                        "startColumns": "4",
+                        "startOffsets": "16",
+                        "endLines": "10",
+                        "endColumns": "12",
+                        "endOffsets": "625"
+                    },
+                    "to": {
+                        "startLines": "16",
+                        "startColumns": "4",
+                        "startOffsets": "685",
+                        "endLines": "25",
+                        "endColumns": "12",
+                        "endOffsets": "1294"
+                    }
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,87 @@
+-- Merging decision tree log ---
+manifest
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:1:1-35:12
+INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:1:1-35:12
+INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:1:1-35:12
+INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:1:1-35:12
+	package
+		INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml
+	android:versionName
+		INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml
+	android:versionCode
+		INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml
+	xmlns:android
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:1:11-69
+uses-permission#android.permission.INTERNET
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:2:5-67
+	android:name
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:2:22-64
+uses-permission#android.permission.RECEIVE_BOOT_COMPLETED
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:3:5-81
+	android:name
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:3:22-78
+uses-permission#android.permission.PACKAGE_USAGE_STATS
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:4:5-78
+	android:name
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:4:22-75
+application
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:6:5-34:19
+INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:6:5-34:19
+	android:extractNativeLibs
+		INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml
+	android:label
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:10:9-39
+	android:roundIcon
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:9:9-48
+	android:icon
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:8:9-43
+	android:allowBackup
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:7:9-35
+	android:theme
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:11:9-40
+	android:usesCleartextTraffic
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:12:9-45
+activity#com.example.biliusage.MainActivity
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:13:9-20:20
+	android:exported
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:15:13-36
+	android:name
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:14:13-41
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:16:13-19:29
+action#android.intent.action.MAIN
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:17:17-69
+	android:name
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:17:25-66
+category#android.intent.category.LAUNCHER
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:18:17-77
+	android:name
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:18:27-74
+receiver#com.example.biliusage.DailyUploadReceiver
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:22:9-24:40
+	android:exported
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:24:13-37
+	android:name
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:23:13-48
+receiver#com.example.biliusage.BootReceiver
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:26:9-33:20
+	android:enabled
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:28:13-35
+	android:exported
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:29:13-36
+	android:name
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:27:13-41
+intent-filter#action:name:android.intent.action.BOOT_COMPLETED
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:30:13-32:29
+action#android.intent.action.BOOT_COMPLETED
+ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:31:17-79
+	android:name
+		ADDED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml:31:25-76
+uses-sdk
+INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml
+INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml
+	android:targetSdkVersion
+		INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from /Users/peiqixin/work/b-zhan/bilibili-usage-android/app/src/main/AndroidManifest.xml

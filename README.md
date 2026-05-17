@@ -5,6 +5,7 @@
 ## 目录
 
 - `bilibili-usage-extension/`：Chrome/Edge Manifest V3 插件，统计当前聚焦窗口里 B 站域名的每日使用时长，并直接写入 D1。
+- `bilibili-usage-android/`：安卓端 APK 项目，通过系统 UsageStatsManager 读取 B 站 App 使用时长并上传 D1。
 - `worker/schema.sql`：D1 建表 SQL。`worker/` 里的 Worker 版本可忽略，除非你之后想改回后端中转。
 
 ## 插件能力

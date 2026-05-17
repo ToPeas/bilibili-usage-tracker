@@ -48,7 +48,7 @@ async function render() {
   total.textContent = formatDuration(status.todayTotalMs || 0);
   active.textContent = status.active ? `正在统计：${status.host}` : "当前未统计";
   uploadStatus.textContent = getTodayUploadText(status);
-  trackingDebug.textContent = formatDebug(status.debug);
+  trackingDebug.textContent = formatDebug(status.debug, status.todayTotalMs || 0);
 
   const rows = Object.entries(status.todayItems || {}).sort((a, b) => b[1] - a[1]);
   hosts.replaceChildren(...rows.map(([host, ms]) => {
@@ -169,11 +169,14 @@ function buildDeviceBreakdown(day) {
 }
 
 function formatDuration(ms) {
-  const minutes = Math.round(ms / 60000);
-  if (minutes < 60) return `${minutes} 分钟`;
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  return `${h} 小时 ${m} 分钟`;
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 function formatDateTime(value) {
@@ -199,13 +202,14 @@ function getTodayUploadText(status) {
   return "今日尚未上传";
 }
 
-function formatDebug(debug) {
+function formatDebug(debug, todayTotalMs) {
   if (!debug?.lastMessageAt) return "还没有收到页面计时消息。请刷新 B 站页面。";
   const ageSeconds = Math.round((Date.now() - debug.lastMessageAt) / 1000);
+  const totalText = formatDuration(todayTotalMs);
   if (debug.lastReason === "accepted") {
-    return `已计入 ${Math.round((debug.lastCountedMs || 0) / 1000)} 秒，${ageSeconds} 秒前，${debug.lastHost || ""}`;
+    return `正在计时 · 今日 ${totalText} · 最近 +${((debug.lastCountedMs || 0) / 1000).toFixed(1)}s · ${ageSeconds}s 前`;
   }
-  return `未计入：${debug.lastReason || "unknown"}，${ageSeconds} 秒前，active=${debug.contextHost || "-"}，visible=${debug.contentVisible}`;
+  return `未计入：${debug.lastReason || "unknown"} · 今日 ${totalText} · ${ageSeconds}s 前 · active=${debug.contextHost || "-"} · visible=${debug.contentVisible}`;
 }
 
 function formatDateLabel(value) {
