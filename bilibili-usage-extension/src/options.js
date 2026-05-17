@@ -13,7 +13,7 @@ async function init() {
   form.cloudflareApiToken.value = settings.cloudflareApiToken || "";
   form.deviceId.value = settings.deviceId || crypto.randomUUID();
   form.deviceAlias.value = settings.deviceAlias || "";
-  form.appVersion.value = settings.appVersion || "1.0.0";
+  form.appVersion.value = settings.appVersion || "1.2.0";
   await renderLog();
 }
 
@@ -29,14 +29,22 @@ form.addEventListener("submit", async event => {
   };
   await chrome.storage.local.set({ settings });
   await chrome.runtime.sendMessage({ type: "settings-updated" });
+  message.className = "status ok";
   message.textContent = "已保存";
 });
 
 uploadButton.addEventListener("click", async () => {
   uploadButton.disabled = true;
+  message.className = "status";
   message.textContent = "正在补传...";
   const response = await chrome.runtime.sendMessage({ type: "upload-now" });
-  message.textContent = response?.ok ? `补传完成：${response.result.uploaded} 天` : `补传失败：${response?.error || "unknown"}`;
+  if (response?.ok) {
+    message.className = "status ok";
+    message.textContent = `补传完成：${response.result.uploaded} / ${response.result.attempted || 0} 天`;
+  } else {
+    message.className = "status error";
+    message.textContent = `补传失败：${response?.error || "unknown"}`;
+  }
   await renderLog();
   uploadButton.disabled = false;
 });
@@ -48,11 +56,11 @@ testD1Button.addEventListener("click", async () => {
   await saveSettings();
   const response = await chrome.runtime.sendMessage({ type: "test-d1-connection" });
   if (response?.ok) {
-    message.className = "status-ok";
+    message.className = "status ok";
     message.textContent = `${response.message} · ${response.database}`;
   } else {
     const phase = response?.phase === "write" ? "写入测试失败" : response?.phase === "read" ? "读取测试失败" : "测试失败";
-    message.className = "status-error";
+    message.className = "status error";
     message.textContent = `${phase}：${response?.error || "unknown"}`;
   }
   testD1Button.disabled = false;
@@ -76,8 +84,15 @@ async function renderLog() {
   const logs = response?.uploadLog || [];
   logList.replaceChildren(...logs.map(log => {
     const item = document.createElement("li");
+    item.className = log.ok ? "ok" : "err";
     const time = new Date(log.time).toLocaleString();
-    item.textContent = `${log.date} · ${log.ok ? "成功" : "失败"} · ${log.status || ""} · ${time}`;
+    const detail = log.ok ? "成功" : `失败 · ${log.message || ""}`;
+    item.textContent = `${log.date} · ${detail} · ${log.status || ""} · ${time}`;
     return item;
   }));
+  if (!logs.length) {
+    const item = document.createElement("li");
+    item.textContent = "暂无上报记录";
+    logList.replaceChildren(item);
+  }
 }

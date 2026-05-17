@@ -7,43 +7,69 @@
     <link rel="stylesheet" href="options.css">
   </head>
   <body>
-    <main>
-      <h1>Bilibili Usage 设置</h1>
-      <form id="settings-form">
-        <label class="field-row">
-          <span>Account ID</span>
-          <input id="account-id" name="accountId" type="text" placeholder="32 位 Account ID" required>
-        </label>
-        <label class="field-row">
-          <span>Database ID</span>
-          <input id="database-id" name="databaseId" type="text" placeholder="D1 数据库 UUID" required>
-        </label>
-        <label class="field-row">
-          <span>API Token</span>
-          <input id="cloudflare-api-token" name="cloudflareApiToken" type="password" autocomplete="off" required>
-        </label>
-        <label class="field-row">
-          <span>Device ID</span>
-          <input id="device-id" name="deviceId" type="text" required>
-        </label>
-        <label class="field-row">
-          <span>Device Alias</span>
-          <input id="device-alias" name="deviceAlias" type="text" placeholder="例如 MacBook / Orion">
-        </label>
-        <label class="field-row">
-          <span>App Version</span>
-          <input id="app-version" name="appVersion" type="text" value="1.0.0">
-        </label>
-        <div class="actions">
-          <button type="submit">保存</button>
-          <button type="button" id="test-d1">测试 D1 读写</button>
-          <button type="button" id="upload-now">立即补传</button>
+    <main class="layout">
+      <header class="page-hero">
+        <div class="brand">
+          <div class="brand-logo">B</div>
+          <div>
+            <h1>B 站使用时长 · 设置</h1>
+            <p>把每天看了多少 B 站、在哪些时段看的写到自己的 Cloudflare D1。</p>
+          </div>
         </div>
-      </form>
-      <p id="message" role="status"></p>
-      <section>
+      </header>
+
+      <section class="card">
+        <h2>Cloudflare D1 配置</h2>
+        <p class="hint">
+          需要你的 Cloudflare Account ID、D1 Database ID 以及一个 D1:Edit 权限的 API Token。
+          <a href="https://developers.cloudflare.com/d1/build-with-d1/use-d1-from-api/" target="_blank" rel="noreferrer">查看官方文档 →</a>
+        </p>
+        <form id="settings-form" class="form-grid">
+          <label class="field-row">
+            <span>Account ID</span>
+            <input id="account-id" name="accountId" type="text" placeholder="32 位 Account ID" required>
+          </label>
+          <label class="field-row">
+            <span>Database ID</span>
+            <input id="database-id" name="databaseId" type="text" placeholder="D1 数据库 UUID" required>
+          </label>
+          <label class="field-row">
+            <span>API Token</span>
+            <input id="cloudflare-api-token" name="cloudflareApiToken" type="password" autocomplete="off" required>
+          </label>
+          <label class="field-row">
+            <span>Device ID</span>
+            <input id="device-id" name="deviceId" type="text" required>
+          </label>
+          <label class="field-row">
+            <span>Device Alias</span>
+            <input id="device-alias" name="deviceAlias" type="text" placeholder="例如 MacBook / Orion">
+          </label>
+          <label class="field-row">
+            <span>App Version</span>
+            <input id="app-version" name="appVersion" type="text" value="1.2.0">
+          </label>
+          <div class="actions">
+            <button type="submit" class="primary-btn">保存</button>
+            <button type="button" id="test-d1" class="secondary-btn">测试 D1 读写</button>
+            <button type="button" id="upload-now" class="secondary-btn">立即补传</button>
+          </div>
+        </form>
+        <p id="message" role="status" class="status"></p>
+      </section>
+
+      <section class="card">
+        <h2>数据说明</h2>
+        <ul class="hint-list">
+          <li>本地按「日 + 小时」两级桶累积，service worker 每天自动把脏数据上传一次；也可以在 popup 中手动「立即上传」。</li>
+          <li>D1 中表 <code>usage_daily</code> 存每天每设备总时长；<code>usage_hours</code> 存每天 24 小时分布；<code>usage_items</code> 存每天各域名分布。</li>
+          <li>插件最多保留本地 200 天的明细，上传范围最近 30 天；如需展示更多历史，由查询时直接读取 D1。</li>
+        </ul>
+      </section>
+
+      <section class="card">
         <h2>最近上报</h2>
-        <ul id="upload-log"></ul>
+        <ul id="upload-log" class="log-list"></ul>
       </section>
     </main>
     <script src="options.js"></script>

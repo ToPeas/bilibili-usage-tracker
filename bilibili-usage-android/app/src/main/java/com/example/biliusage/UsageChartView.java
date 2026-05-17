@@ -202,7 +202,12 @@ public final class UsageChartView extends View {
         }
 
         float cell = (width - padding * 2f) / days.size();
-        float barWidth = Math.min(cell * 0.5f, 28f * density);
+        boolean dense = cell < 18f * density;
+        float barWidth = Math.min(cell * (dense ? 0.85f : 0.5f), 28f * density);
+        if (dense) barWidth = Math.max(barWidth, 2f * density);
+
+        // 稀疏 X 轴标签：最多画 8 个。
+        int labelEvery = Math.max(1, (int) Math.ceil(days.size() / 8.0));
 
         for (int i = 0; i < days.size(); i++) {
             DayBucket day = days.get(i);
@@ -211,7 +216,7 @@ public final class UsageChartView extends View {
             float left = centerX - barWidth / 2f;
             float right = centerX + barWidth / 2f;
 
-            if (isSelected) {
+            if (isSelected && !dense) {
                 float cellLeft = padding + cell * i + 2f * density;
                 float cellRight = padding + cell * (i + 1) - 2f * density;
                 tmpRect.set(cellLeft, chartTop - tooltipHeight - 4f * density, cellRight, chartBottom);
@@ -222,18 +227,22 @@ public final class UsageChartView extends View {
             canvas.drawRoundRect(tmpRect, barWidth / 2f, barWidth / 2f, barBgPaint);
 
             float ratio = (float) ((double) day.totalMs / (double) max);
-            float barH = Math.max(6f * density, chartHeight * ratio);
+            float barH = Math.max(2f * density, chartHeight * ratio);
             float top = chartBottom - barH;
             tmpRect.set(left, top, right, chartBottom);
             Paint barP = isSelected ? barSelectedPaint : barPaint;
             canvas.drawRoundRect(tmpRect, barWidth / 2f, barWidth / 2f, barP);
 
-            if (isSelected) {
+            if (isSelected && !dense) {
                 canvas.drawRoundRect(tmpRect, barWidth / 2f, barWidth / 2f, barStrokePaint);
             }
 
-            Paint lp = isSelected ? labelSelectedPaint : labelPaint;
-            canvas.drawText(day.label, centerX, height - 6f * density, lp);
+            // 标签：选中一定画；其余只画每 labelEvery 个。太密则所有标签都隐藏（只依赖顶部 tooltip）。
+            boolean drawLabel = isSelected || (!dense && (i % labelEvery == 0));
+            if (drawLabel) {
+                Paint lp = isSelected ? labelSelectedPaint : labelPaint;
+                canvas.drawText(day.label, centerX, height - 6f * density, lp);
+            }
 
             if (isSelected) {
                 String text = formatShortDuration(day.totalMs);

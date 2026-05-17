@@ -1,41 +1,99 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
   <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Bilibili Usage</title>
-    <link rel="stylesheet" href="popup.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>B 站使用时长</title>
+    <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <main>
-      <header>
-        <h1>今日 B 站</h1>
-        <strong id="total">0 分钟</strong>
+    <main class="app">
+      <header class="hero">
+        <div class="hero-row">
+          <div class="hero-brand">
+            <div class="hero-logo">B</div>
+            <div>
+              <div class="hero-eyebrow">浏览器 · 今日</div>
+              <h1 class="hero-today" id="todayDuration">--</h1>
+            </div>
+          </div>
+          <div class="hero-actions">
+            <button class="ghost-btn" id="openOptions" title="设置">⚙</button>
+          </div>
+        </div>
+        <div class="hero-chips">
+          <span class="chip chip-state" id="stateChip">检测中…</span>
+          <span class="chip chip-host" id="hostChip">未在 B 站</span>
+          <span class="chip chip-db" id="dbChip">D1：未配置</span>
+        </div>
       </header>
-      <p id="active"></p>
-      <ul id="hosts"></ul>
-      <section class="upload-card">
-        <div>
-          <h2>今日上传</h2>
-          <p id="upload-status">检查中...</p>
+
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">使用时长趋势</h2>
+            <p class="card-sub" id="rangeSummary">最近 7 天</p>
+          </div>
+          <div class="range-tabs" id="rangeTabs">
+            <button data-range="7" class="active">7 天</button>
+            <button data-range="30">30 天</button>
+            <button data-range="90">90 天</button>
+            <button data-range="180">半年</button>
+          </div>
         </div>
-        <button id="upload-now">立即补传</button>
-      </section>
-      <section class="debug-card">
-        <h2>计时状态</h2>
-        <p id="tracking-debug">检查中...</p>
-      </section>
-      <section class="recent">
-        <div class="section-title">
-          <h2>最近 7 天</h2>
-          <span id="database-label">未配置 D1</span>
+        <div class="chart-wrap">
+          <canvas id="trendChart" width="640" height="220"></canvas>
         </div>
-        <div id="recent-chart" class="chart"></div>
-        <div id="device-detail" class="device-detail"></div>
-        <ul id="recent-days"></ul>
-        <p id="recent-message" role="status"></p>
+        <div class="legend" id="trendLegend"></div>
       </section>
-      <button id="open-options" class="ghost-button">设置 D1 连接</button>
+
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title" id="dayTitle">选中某天</h2>
+            <p class="card-sub" id="daySub">点击柱子可查看「24 小时分布 + 各设备」</p>
+          </div>
+        </div>
+        <div class="chart-wrap small">
+          <canvas id="hourChart" width="640" height="160"></canvas>
+        </div>
+        <ul class="device-list" id="deviceList"></ul>
+      </section>
+
+      <section class="card" id="installHintCard" hidden>
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">提示</h2>
+            <p class="card-sub" id="installHint">如刚装好/重载插件，请刷新一下 B 站标签页让 content script 注入</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">操作</h2>
+            <p class="card-sub" id="lastUploadInfo">尚未上传</p>
+          </div>
+        </div>
+        <div class="action-row">
+          <button class="primary-btn" id="uploadNow">立即上传</button>
+          <button class="secondary-btn" id="testD1">测试 D1</button>
+          <button class="secondary-btn" id="openOptions2">设置</button>
+        </div>
+        <div class="status-line" id="uploadStatus"></div>
+      </section>
+
+      <section class="card debug-card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">调试信息</h2>
+            <p class="card-sub">每 2 秒刷新，便于排查「不在计时」原因</p>
+          </div>
+          <button class="secondary-btn small-btn" id="toggleDebug">展开</button>
+        </div>
+        <ul class="debug-list" id="debugList" hidden></ul>
+      </section>
     </main>
     <script src="popup.js"></script>
   </body>

@@ -58,9 +58,14 @@ public class MainActivity extends android.app.Activity {
     private TextView selectedDayMeta;
     private TextView databaseLabel;
     private TextView chartHint;
+    private TextView rangeLabel;
+    private TextView hourCardSubtitle;
     private UsageChartView chart;
     private DeviceBreakdownView deviceBreakdown;
+    private HourChartView hourChart;
+    private LinearLayout rangeTabsRow;
 
+    private int currentRangeDays = 7;
     private List<UsageChartView.DayBucket> currentDays = new ArrayList<>();
 
     @Override
@@ -84,6 +89,8 @@ public class MainActivity extends android.app.Activity {
         root.addView(spacer(14));
         root.addView(buildChartCard());
         root.addView(spacer(14));
+        root.addView(buildHourCard());
+        root.addView(spacer(14));
         root.addView(buildDeviceCard());
         root.addView(spacer(14));
         root.addView(buildActionCard());
@@ -98,6 +105,35 @@ public class MainActivity extends android.app.Activity {
     protected void onResume() {
         super.onResume();
         refreshTodayCard();
+        // 进入 app 后：
+        //   1) 立刻拉一次 D1，以立刻展示今天可能已由 Chrome 插件/其他设备上传的数据。
+        //   2) 并行后台上传本机今日，完成后静默再拉一次 D1 推表。
+        // 这样「有没有今日数据」不会被 Android 本机上传是否成功决定。
+        runAsync(() -> {
+            loadRecentChart();
+            return null; // 不强这条状态
+        });
+        scheduleBackgroundTodayUpload();
+    }
+
+    /** 后台上传今天数据，上传后静默重拉 D1，不跳「执行中」状态。 */
+    private void scheduleBackgroundTodayUpload() {
+        SettingsStore settings = SettingsStore.load(this);
+        if (!settings.isCloudConfigured()) return;
+        if (!UsageCollector.hasUsageAccess(this)) return;
+        new Thread(() -> {
+            try {
+                DailyUploadReceiver.upload(this, true, 1);
+            } catch (Exception ignore) {
+                return; // 失败不报武错，避免干扰用户
+            }
+            // 上传完重拉 D1（不用 runAsync，避免覆盖其它状态提示）
+            try {
+                loadRecentChart();
+            } catch (Exception ignore) {
+                // 拉取失败时保持原图
+            }
+        }).start();
     }
 
     // ---------- 顶栏 ----------
@@ -200,7 +236,7 @@ public class MainActivity extends android.app.Activity {
         return c;
     }
 
-    // ---------- 7 天图表卡 ----------
+    // ---------- 趋势图表卡 ----------
 
     private View buildChartCard() {
         LinearLayout card = card();
@@ -210,7 +246,7 @@ public class MainActivity extends android.app.Activity {
         titleRow.setGravity(Gravity.CENTER_VERTICAL);
         card.addView(titleRow);
 
-        TextView title = sectionTitle("最近 7 天");
+        TextView title = sectionTitle("使用时长趋势");
         LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         titleRow.addView(title, titleLp);
@@ -224,8 +260,29 @@ public class MainActivity extends android.app.Activity {
         databaseLabel.setMaxWidth(dp(180));
         titleRow.addView(databaseLabel);
 
+        rangeLabel = new TextView(this);
+        rangeLabel.setText("范围：最近 7 天");
+        rangeLabel.setTextColor(COLOR_TEXT_SECONDARY);
+        rangeLabel.setTextSize(11f);
+        LinearLayout.LayoutParams rangeLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rangeLp.topMargin = dp(4);
+        card.addView(rangeLabel, rangeLp);
+
+        rangeTabsRow = new LinearLayout(this);
+        rangeTabsRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams rtLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        rtLp.topMargin = dp(8);
+        rtLp.bottomMargin = dp(6);
+        card.addView(rangeTabsRow, rtLp);
+        appendRangeTab(rangeTabsRow, 7, "7 天");
+        appendRangeTab(rangeTabsRow, 30, "30 天");
+        appendRangeTab(rangeTabsRow, 90, "3 个月");
+        appendRangeTab(rangeTabsRow, 180, "半年");
+
         chartHint = new TextView(this);
-        chartHint.setText("点击/拖动柱条查看某一天的设备明细");
+        chartHint.setText("点击/拖动柱条查看某一天的设备 + 24 小时分布");
         chartHint.setTextColor(COLOR_TEXT_MUTED);
         chartHint.setTextSize(11f);
         LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(
@@ -239,8 +296,92 @@ public class MainActivity extends android.app.Activity {
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(180));
         card.addView(chart, chartLp);
 
-        chart.setOnDaySelectedListener((index, bucket) -> refreshDeviceCard(bucket));
+        chart.setOnDaySelectedListener((index, bucket) -> {
+            refreshDeviceCard(bucket);
+            loadHoursForSelected(bucket);
+        });
 
+        return card;
+    }
+
+    private void appendRangeTab(LinearLayout row, int days, String text) {
+        TextView t = new TextView(this);
+        t.setText(text);
+        t.setTextSize(12f);
+        t.setPadding(dp(12), dp(6), dp(12), dp(6));
+        t.setGravity(Gravity.CENTER);
+        t.setOnClickListener(v -> {
+            if (currentRangeDays == days) return;
+            currentRangeDays = days;
+            updateRangeTabsUi();
+            runAsync(() -> {
+                loadRecentChart();
+                return "已切换到" + text;
+            });
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.rightMargin = dp(6);
+        t.setLayoutParams(lp);
+        t.setTag(days);
+        row.addView(t);
+        updateRangeTabStyle(t, days == currentRangeDays);
+    }
+
+    private void updateRangeTabsUi() {
+        if (rangeTabsRow == null) return;
+        for (int i = 0; i < rangeTabsRow.getChildCount(); i++) {
+            View child = rangeTabsRow.getChildAt(i);
+            if (!(child instanceof TextView)) continue;
+            Integer days = (Integer) child.getTag();
+            if (days == null) continue;
+            updateRangeTabStyle((TextView) child, days == currentRangeDays);
+        }
+        if (rangeLabel != null) rangeLabel.setText("范围：" + labelOfRange(currentRangeDays));
+    }
+
+    private void updateRangeTabStyle(TextView tv, boolean active) {
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setShape(android.graphics.drawable.GradientDrawable.RECTANGLE);
+        bg.setCornerRadius(dp(999));
+        if (active) {
+            bg.setColor(COLOR_PINK);
+            tv.setTextColor(0xFFFFFFFF);
+            tv.setTypeface(null, Typeface.BOLD);
+        } else {
+            bg.setColor(0xFFFFE3EC);
+            tv.setTextColor(0xFFE15D88);
+            tv.setTypeface(null, Typeface.NORMAL);
+        }
+        tv.setBackground(bg);
+    }
+
+    private String labelOfRange(int days) {
+        if (days >= 180) return "最近半年";
+        if (days >= 90) return "最近 3 个月";
+        if (days >= 30) return "最近 30 天";
+        return "最近 " + days + " 天";
+    }
+
+    // ---------- 24 小时分布卡 ----------
+
+    private View buildHourCard() {
+        LinearLayout card = card();
+        card.addView(sectionTitle("选中某天·24 小时分布"));
+        hourCardSubtitle = new TextView(this);
+        hourCardSubtitle.setText("看看你在哪个时段用 B 站最多");
+        hourCardSubtitle.setTextColor(COLOR_TEXT_SECONDARY);
+        hourCardSubtitle.setTextSize(12f);
+        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        subLp.topMargin = dp(4);
+        subLp.bottomMargin = dp(8);
+        card.addView(hourCardSubtitle, subLp);
+
+        hourChart = new HourChartView(this);
+        LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(140));
+        card.addView(hourChart, hLp);
         return card;
     }
 
@@ -301,7 +442,7 @@ public class MainActivity extends android.app.Activity {
         sLp.bottomMargin = dp(10);
         card.addView(statusBar, sLp);
 
-        Button refreshBtn = primaryButton("刷新最近 7 天图表");
+        Button refreshBtn = primaryButton("刷新当前范围的趋势图");
         refreshBtn.setOnClickListener(v -> runAsync(() -> {
             saveSettings();
             loadRecentChart();
@@ -311,9 +452,15 @@ public class MainActivity extends android.app.Activity {
 
         card.addView(spacer(8));
 
-        Button uploadBtn = primaryButton("上传最近 7 天（含今天）");
-        uploadBtn.setOnClickListener(v -> runAsync(() -> DailyUploadReceiver.upload(this, true)));
+        Button uploadBtn = primaryButton("上传当前范围（含今天）");
+        uploadBtn.setOnClickListener(v -> runAsync(() -> DailyUploadReceiver.upload(this, true, currentRangeDays)));
         card.addView(uploadBtn);
+
+        card.addView(spacer(8));
+
+        Button backfillBtn = secondaryButton("补传最近半年（后台）");
+        backfillBtn.setOnClickListener(v -> runAsync(() -> DailyUploadReceiver.upload(this, true, DailyUploadReceiver.BACKFILL_DAYS)));
+        card.addView(backfillBtn);
 
         card.addView(spacer(8));
 
@@ -455,12 +602,15 @@ public class MainActivity extends android.app.Activity {
                 deviceBreakdown.setData("按设备拆分", Collections.emptyList());
                 selectedDayTitle.setText("请先配置 D1");
                 selectedDayMeta.setText("填写 Cloudflare 信息后才能展示历史数据");
+                if (hourChart != null) hourChart.setHours(new long[24]);
+                if (hourCardSubtitle != null) hourCardSubtitle.setText("请先配置 D1");
             });
             return;
         }
+        int days = Math.max(1, currentRangeDays);
         Calendar toCal = Calendar.getInstance();
         Calendar fromCal = Calendar.getInstance();
-        fromCal.add(Calendar.DAY_OF_MONTH, -6);
+        fromCal.add(Calendar.DAY_OF_MONTH, -(days - 1));
         String from = formatDate(fromCal);
         String to = formatDate(toCal);
 
@@ -470,7 +620,7 @@ public class MainActivity extends android.app.Activity {
         Map<String, Long> totalsByDate = new LinkedHashMap<>();
 
         Calendar cursor = (Calendar) fromCal.clone();
-        for (int i = 0; i < 7; i++) {
+        for (int i = 0; i < days; i++) {
             String date = formatDate(cursor);
             devicesByDate.put(date, new ArrayList<>());
             totalsByDate.put(date, 0L);
@@ -514,16 +664,55 @@ public class MainActivity extends android.app.Activity {
 
         runOnUiThread(() -> {
             chart.setDays(currentDays);
-            int lastIdx = currentDays.isEmpty() ? -1 : currentDays.size() - 1;
-            chart.setSelectedIndex(lastIdx);
-            if (lastIdx >= 0) {
-                refreshDeviceCard(currentDays.get(lastIdx));
+            // 默认选中最近一个有数据的日，没有则选今天
+            int idx = currentDays.size() - 1;
+            for (int i = currentDays.size() - 1; i >= 0; i--) {
+                if (currentDays.get(i).totalMs > 0) { idx = i; break; }
+            }
+            chart.setSelectedIndex(idx);
+            updateRangeTabsUi();
+            if (idx >= 0 && !currentDays.isEmpty()) {
+                refreshDeviceCard(currentDays.get(idx));
+                loadHoursForSelected(currentDays.get(idx));
             } else {
                 deviceBreakdown.setData("按设备拆分", Collections.emptyList());
                 selectedDayTitle.setText("暂无数据");
-                selectedDayMeta.setText("最近 7 天没有上传记录");
+                selectedDayMeta.setText(labelOfRange(currentRangeDays) + "没有上传记录");
+                if (hourChart != null) hourChart.setHours(new long[24]);
+                if (hourCardSubtitle != null) hourCardSubtitle.setText("暂无时段数据");
             }
         });
+    }
+
+    /** 拉某天的 24 小时分布，多设备累加；在后台线程调用。 */
+    private void loadHoursForSelected(UsageChartView.DayBucket bucket) {
+        if (bucket == null || hourChart == null) return;
+        SettingsStore settings = SettingsStore.load(this);
+        if (!settings.isCloudConfigured()) return;
+        new Thread(() -> {
+            long[] result = new long[24];
+            try {
+                JSONArray rows = new D1Client(settings).queryDayHours(bucket.date);
+                if (rows != null) {
+                    for (int i = 0; i < rows.length(); i++) {
+                        JSONObject row = rows.getJSONObject(i);
+                        int hour = Math.max(0, Math.min(23, row.optInt("hour", 0)));
+                        result[hour] += row.optLong("durationMs", 0L);
+                    }
+                }
+            } catch (Exception ignore) {
+                // 表不存在或查询失败时，展示空
+            }
+            runOnUiThread(() -> {
+                hourChart.setHours(result);
+                long sum = 0L;
+                for (long v : result) sum += v;
+                if (hourCardSubtitle != null) {
+                    if (sum <= 0L) hourCardSubtitle.setText(longLabel(bucket.date) + " · 该日暂无时段数据");
+                    else hourCardSubtitle.setText(longLabel(bucket.date) + " · 合计 " + formatDuration(sum));
+                }
+            });
+        }).start();
     }
 
     private void refreshDeviceCard(UsageChartView.DayBucket bucket) {
