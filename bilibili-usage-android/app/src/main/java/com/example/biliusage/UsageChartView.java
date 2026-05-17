@@ -30,6 +30,14 @@ public final class UsageChartView extends View {
     private final Paint gridPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint emptyPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint selectedBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    // 折线图专用
+    private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint lineFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint dotPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint dotOuterPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint dotSelectedPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path linePath = new Path();
+    private final Path fillPath = new Path();
 
     private final RectF tmpRect = new RectF();
     private final Path trianglePath = new Path();
@@ -83,6 +91,26 @@ public final class UsageChartView extends View {
         emptyPaint.setTextAlign(Paint.Align.CENTER);
 
         selectedBgPaint.setColor(PINK_HOVER_BG);
+
+        // 折线图
+        linePaint.setColor(PINK);
+        linePaint.setStyle(Paint.Style.STROKE);
+        linePaint.setStrokeWidth(2.5f * density);
+        linePaint.setStrokeCap(Paint.Cap.ROUND);
+        linePaint.setStrokeJoin(Paint.Join.ROUND);
+
+        lineFillPaint.setColor(0x33FB7299); // 粉色半透明填充
+        lineFillPaint.setStyle(Paint.Style.FILL);
+
+        dotPaint.setColor(PINK);
+        dotPaint.setStyle(Paint.Style.FILL);
+
+        dotOuterPaint.setColor(Color.WHITE);
+        dotOuterPaint.setStyle(Paint.Style.FILL);
+
+        dotSelectedPaint.setColor(PINK);
+        dotSelectedPaint.setStyle(Paint.Style.STROKE);
+        dotSelectedPaint.setStrokeWidth(2.5f * density);
 
         setMinimumHeight(Math.round(180f * density));
         setClickable(true);
@@ -194,6 +222,7 @@ public final class UsageChartView extends View {
         float chartBottom = height - labelHeight;
         float chartHeight = chartBottom - chartTop;
 
+        // 基线
         canvas.drawLine(padding, chartBottom, width - padding, chartBottom, gridPaint);
 
         long max = 1L;
@@ -201,49 +230,92 @@ public final class UsageChartView extends View {
             max = Math.max(max, d.totalMs);
         }
 
-        float cell = (width - padding * 2f) / days.size();
-        boolean dense = cell < 18f * density;
-        float barWidth = Math.min(cell * (dense ? 0.85f : 0.5f), 28f * density);
-        if (dense) barWidth = Math.max(barWidth, 2f * density);
+        int n = days.size();
+        float cell = (width - padding * 2f) / Math.max(1, n);
 
-        // 稀疏 X 轴标签：最多画 8 个。
-        int labelEvery = Math.max(1, (int) Math.ceil(days.size() / 8.0));
-
-        for (int i = 0; i < days.size(); i++) {
+        // 计算每个点的中心坐标
+        float[] xs = new float[n];
+        float[] ys = new float[n];
+        for (int i = 0; i < n; i++) {
             DayBucket day = days.get(i);
             float centerX = padding + cell * i + cell / 2f;
-            boolean isSelected = i == selectedIndex;
-            float left = centerX - barWidth / 2f;
-            float right = centerX + barWidth / 2f;
-
-            if (isSelected && !dense) {
-                float cellLeft = padding + cell * i + 2f * density;
-                float cellRight = padding + cell * (i + 1) - 2f * density;
-                tmpRect.set(cellLeft, chartTop - tooltipHeight - 4f * density, cellRight, chartBottom);
-                canvas.drawRoundRect(tmpRect, 10f * density, 10f * density, selectedBgPaint);
-            }
-
-            tmpRect.set(left, chartTop, right, chartBottom);
-            canvas.drawRoundRect(tmpRect, barWidth / 2f, barWidth / 2f, barBgPaint);
-
             float ratio = (float) ((double) day.totalMs / (double) max);
-            float barH = Math.max(2f * density, chartHeight * ratio);
-            float top = chartBottom - barH;
-            tmpRect.set(left, top, right, chartBottom);
-            Paint barP = isSelected ? barSelectedPaint : barPaint;
-            canvas.drawRoundRect(tmpRect, barWidth / 2f, barWidth / 2f, barP);
+            float y = chartBottom - chartHeight * ratio;
+            // 最小提起 2dp，避免零值点贴基线看不见
+            if (day.totalMs <= 0L) y = chartBottom; // 零值贴底
+            else y = Math.min(y, chartBottom - 2f * density);
+            xs[i] = centerX;
+            ys[i] = y;
+        }
 
-            if (isSelected && !dense) {
-                canvas.drawRoundRect(tmpRect, barWidth / 2f, barWidth / 2f, barStrokePaint);
+        // 选中反选背景豹
+        if (selectedIndex >= 0 && selectedIndex < n) {
+            float cellLeft = padding + cell * selectedIndex + 2f * density;
+            float cellRight = padding + cell * (selectedIndex + 1) - 2f * density;
+            tmpRect.set(cellLeft, chartTop - tooltipHeight - 4f * density, cellRight, chartBottom);
+            canvas.drawRoundRect(tmpRect, 10f * density, 10f * density, selectedBgPaint);
+        }
+
+        // 填充面积（折线下方粉色渐变）
+        if (n >= 2) {
+            fillPath.reset();
+            fillPath.moveTo(xs[0], chartBottom);
+            for (int i = 0; i < n; i++) {
+                if (i == 0) fillPath.lineTo(xs[i], ys[i]);
+                else {
+                    // 用三次贝塞尔曲线让折线更平滑
+                    float midX = (xs[i - 1] + xs[i]) / 2f;
+                    fillPath.cubicTo(midX, ys[i - 1], midX, ys[i], xs[i], ys[i]);
+                }
+            }
+            fillPath.lineTo(xs[n - 1], chartBottom);
+            fillPath.close();
+            canvas.drawPath(fillPath, lineFillPaint);
+
+            // 折线
+            linePath.reset();
+            linePath.moveTo(xs[0], ys[0]);
+            for (int i = 1; i < n; i++) {
+                float midX = (xs[i - 1] + xs[i]) / 2f;
+                linePath.cubicTo(midX, ys[i - 1], midX, ys[i], xs[i], ys[i]);
+            }
+            canvas.drawPath(linePath, linePaint);
+        }
+
+        // X 轴标签稀疏化
+        int labelEvery = Math.max(1, (int) Math.ceil(n / 8.0));
+
+        // 画点 + 标签
+        float dotR = 3.5f * density;
+        float dotSelOuterR = 7f * density;
+        float dotSelInnerR = 4.5f * density;
+        for (int i = 0; i < n; i++) {
+            DayBucket day = days.get(i);
+            boolean isSelected = i == selectedIndex;
+            float centerX = xs[i];
+            float pointY = ys[i];
+
+            // 点
+            if (isSelected) {
+                canvas.drawCircle(centerX, pointY, dotSelOuterR, dotOuterPaint);
+                canvas.drawCircle(centerX, pointY, dotSelInnerR, dotPaint);
+                canvas.drawCircle(centerX, pointY, dotSelOuterR, dotSelectedPaint);
+            } else if (day.totalMs > 0L) {
+                canvas.drawCircle(centerX, pointY, dotR + 1f * density, dotOuterPaint);
+                canvas.drawCircle(centerX, pointY, dotR, dotPaint);
+            } else if (n <= 10) {
+                // 零值点但稀疏时还是表示一下位置（加个空心圆）
+                canvas.drawCircle(centerX, pointY, dotR, dotOuterPaint);
             }
 
-            // 标签：选中一定画；其余只画每 labelEvery 个。太密则所有标签都隐藏（只依赖顶部 tooltip）。
-            boolean drawLabel = isSelected || (!dense && (i % labelEvery == 0));
+            // X 轴标签
+            boolean drawLabel = isSelected || (i % labelEvery == 0) || i == n - 1;
             if (drawLabel) {
                 Paint lp = isSelected ? labelSelectedPaint : labelPaint;
                 canvas.drawText(day.label, centerX, height - 6f * density, lp);
             }
 
+            // Tooltip
             if (isSelected) {
                 String text = formatShortDuration(day.totalMs);
                 float textWidth = tooltipTextPaint.measureText(text);
@@ -261,7 +333,7 @@ public final class UsageChartView extends View {
                     tooltipLeft -= shift;
                     tooltipRight -= shift;
                 }
-                float tooltipTop = top - tooltipHeight - 6f * density;
+                float tooltipTop = pointY - tooltipHeight - 10f * density;
                 if (tooltipTop < 2f * density) tooltipTop = 2f * density;
                 float tooltipBot = tooltipTop + tooltipHeight;
                 tmpRect.set(tooltipLeft, tooltipTop, tooltipRight, tooltipBot);

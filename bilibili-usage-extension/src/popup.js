@@ -120,10 +120,11 @@ async function refreshStatus() {
   }
   hostChip.textContent = status.host ? status.host : "未在 B 站";
   const debug = status.debug || {};
-  // 只有明确是 idle / locked 才显示「空闲」状态；unknown / 缺失 一律当成 active。
-  const isIdle = debug.idleState === "idle" || debug.idleState === "locked";
-  if (isIdle) {
-    stateChip.textContent = debug.idleState === "locked" ? "已锁屏" : "空闲超过 1 分钟";
+  // 不再依赖 chrome.idle 决定是否计时。
+  // 但仅在「系统明确锁屏」时对用户提示，以避免用户以为插件坏了。
+  // 看视频不动键鼠会被误判 idle，所以 idle 状态不再包装「空闲 1 分钟」提示。
+  if (debug.idleState === "locked") {
+    stateChip.textContent = "已锁屏";
     stateChip.classList.add("idle");
   }
   if (status.uploadLog && status.uploadLog.length) {

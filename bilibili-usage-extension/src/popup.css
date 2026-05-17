@@ -49,6 +49,9 @@ body { width: 380px; min-height: 480px; }
 }
 .hero-eyebrow { font-size: 11px; opacity: 0.85; letter-spacing: 0.6px; }
 .hero-today { font-size: 26px; font-weight: 700; margin: 2px 0 0; letter-spacing: -0.5px; }
+.hero-all-row { display: inline-flex; gap: 6px; align-items: baseline; margin-top: 6px; padding: 2px 8px; background: rgba(255,255,255,0.16); border-radius: 8px; }
+.hero-all-label { font-size: 11px; opacity: 0.85; }
+.hero-all-value { font-size: 13px; font-weight: 700; }
 
 .hero-actions .ghost-btn {
   background: rgba(255, 255, 255, 0.18);

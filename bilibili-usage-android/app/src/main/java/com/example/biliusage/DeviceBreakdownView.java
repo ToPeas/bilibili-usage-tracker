@@ -72,6 +72,8 @@ public final class DeviceBreakdownView extends View {
         for (UsageChartView.DeviceUsage d : this.devices) max = Math.max(max, d.totalMs);
         this.maxTotal = max;
         requestLayout();
+        // 双保险：让父链也 requestLayout，避免 LinearLayout 不重新 measure 导致高度错
+        if (getParent() instanceof View) ((View) getParent()).requestLayout();
         invalidate();
     }
 
@@ -79,7 +81,7 @@ public final class DeviceBreakdownView extends View {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = MeasureSpec.getSize(widthMeasureSpec);
         int rows = Math.max(devices.size(), 1);
-        int rowH = Math.round(56f * density);
+        int rowH = Math.round(72f * density); // 每行需容纳：名称(18) + 进度条(8) + meta(14) + 间隔，以前 56 太压
         int contentH = rowH * rows + Math.round(16f * density);
         if (devices.isEmpty()) {
             contentH = Math.round(80f * density);
@@ -100,7 +102,7 @@ public final class DeviceBreakdownView extends View {
 
         float left = 4f * density;
         float right = width - 4f * density;
-        float rowH = 56f * density;
+        float rowH = 72f * density;
 
         for (int i = 0; i < devices.size(); i++) {
             UsageChartView.DeviceUsage d = devices.get(i);
@@ -112,12 +114,15 @@ public final class DeviceBreakdownView extends View {
             canvas.drawCircle(dotCx, dotCy, dotR, dotP);
 
             float nameX = dotCx + dotR + 8f * density;
-            canvas.drawText(d.displayName(), nameX, top + 18f * density, nameP);
-
+            // 右侧时间文本优先，名称多余部分裁断加省略号
             String timeText = UsageChartView.formatShortDuration(d.totalMs);
+            float timeWidth = timeP.measureText(timeText);
+            float nameMaxWidth = right - nameX - timeWidth - 12f * density;
+            String nameText = ellipsize(d.displayName(), nameMaxWidth, nameP);
+            canvas.drawText(nameText, nameX, top + 18f * density, nameP);
             canvas.drawText(timeText, right, top + 18f * density, timeP);
 
-            float barTop = top + 26f * density;
+            float barTop = top + 30f * density;
             float barBot = barTop + 8f * density;
             tmpRect.set(left, barTop, right, barBot);
             canvas.drawRoundRect(tmpRect, 4f * density, 4f * density, barBgP);
@@ -130,12 +135,29 @@ public final class DeviceBreakdownView extends View {
             }
 
             String meta = d.uploadedAt.isEmpty() ? "尚未记录上传时间" : ("上传 " + d.uploadedAt);
-            canvas.drawText(meta, left, barBot + 14f * density, metaP);
+            canvas.drawText(meta, left, barBot + 18f * density, metaP);
 
             if (i < devices.size() - 1) {
                 float dy = top + rowH - 1f;
                 canvas.drawLine(left, dy, right, dy, dividerP);
             }
         }
+    }
+
+    /** 如果文本宽度超过 maxWidth，则裁切并追加 … */
+    private static String ellipsize(String text, float maxWidth, Paint paint) {
+        if (text == null || text.isEmpty() || maxWidth <= 0f) return "";
+        if (paint.measureText(text) <= maxWidth) return text;
+        String suffix = "…";
+        float suffixW = paint.measureText(suffix);
+        int lo = 0, hi = text.length();
+        while (lo < hi) {
+            int mid = (lo + hi + 1) >>> 1;
+            float w = paint.measureText(text, 0, mid) + suffixW;
+            if (w <= maxWidth) lo = mid;
+            else hi = mid - 1;
+        }
+        if (lo <= 0) return suffix;
+        return text.substring(0, lo) + suffix;
     }
 }

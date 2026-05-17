@@ -51,14 +51,14 @@ chrome.runtime.onInstalled.addListener(async () => {
       settings: { ...settings, deviceId: crypto.randomUUID() }
     });
   }
-  chrome.idle.setDetectionInterval(60);
+  try { chrome.idle?.setDetectionInterval?.(60); } catch (_e) {}
   await scheduleDailyUpload();
   await reconcile();
   await uploadPendingDays();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  chrome.idle.setDetectionInterval(60);
+  try { chrome.idle?.setDetectionInterval?.(60); } catch (_e) {}
   await scheduleDailyUpload();
   await reconcile();
   await uploadPendingDays();
@@ -70,8 +70,12 @@ chrome.tabs.onUpdated.addListener((_tabId, changeInfo) => {
     reconcile();
   }
 });
-chrome.windows.onFocusChanged.addListener(() => reconcile());
-chrome.idle.onStateChanged.addListener(() => reconcile());
+if (chrome.windows?.onFocusChanged) {
+  chrome.windows.onFocusChanged.addListener(() => reconcile());
+}
+if (chrome.idle?.onStateChanged) {
+  chrome.idle.onStateChanged.addListener(() => reconcile());
+}
 
 chrome.alarms.onAlarm.addListener(async alarm => {
   if (alarm.name === "daily-upload") {
@@ -129,7 +133,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function reconcile() {
   const context = await getCurrentContext();
-  const shouldTrack = TARGET_HOSTS.has(context.host) && context.focused && context.idleState === "active";
+  // 不再依赖 chrome.idle：看视频可能不动键鼠 1 分钟以上会被误判 idle。
+  // content.js 已经只在 document.visible 时上报，足够代表「正在看」。
+  const shouldTrack = TARGET_HOSTS.has(context.host) && context.focused;
   state.active = shouldTrack;
   state.host = shouldTrack ? context.host : "";
   state.tabId = shouldTrack ? context.tabId : 0;
@@ -173,10 +179,11 @@ async function getCurrentContext() {
 
 async function getNormalFocusedWindow() {
   try {
+    if (!chrome.windows?.getAll) return null; // Orion 可能不支持
     const windows = await chrome.windows.getAll({ populate: false });
     if (!windows || !windows.length) return null;
     // 优先取被 focused 且 type==normal
-    const normals = windows.filter(w => w.type === "normal" && w.state !== "minimized");
+    const normals = windows.filter(w => (w.type === "normal" || !w.type) && w.state !== "minimized");
     if (!normals.length) return null;
     const focused = normals.find(w => w.focused);
     return focused || normals[0];
@@ -186,6 +193,8 @@ async function getNormalFocusedWindow() {
 }
 
 async function getIdleState() {
+  // chrome.idle 在 Orion 上可能不存在或返回不准（看视频不动鼠戰1分钟会被误判 idle）。
+  // 我们不再依赖它来怎么是否计时，仅作为 debug 信息展示。
   try {
     if (!chrome.idle?.queryState) return "active";
     const value = await chrome.idle.queryState(60);
@@ -222,7 +231,6 @@ async function handleUsageDelta(message, sender) {
     message.visible &&
     context.tabId === tabId &&
     context.focused &&
-    context.idleState === "active" &&
     TARGET_HOSTS.has(context.host);
 
   if (!shouldTrack) {
@@ -280,7 +288,6 @@ function getIgnoreReason(message, context, tabId) {
   if (!message.visible) return "content hidden";
   if (context.tabId !== tabId) return "not active tab";
   if (!context.focused) return "window not focused";
-  if (context.idleState !== "active") return `idle:${context.idleState}`;
   if (!TARGET_HOSTS.has(context.host)) return "active tab not bilibili";
   return "not active";
 }
@@ -495,7 +502,7 @@ async function getRecentUsage(rangeDays) {
         total_ms AS totalMs,
         uploaded_at AS uploadedAt
       FROM usage_daily
-      WHERE source = 'web' AND date >= ? AND date <= ?
+      WHERE date >= ? AND date <= ?
       ORDER BY date DESC, total_ms DESC, device_id ASC
     `,
     params: [from, to]
@@ -514,9 +521,16 @@ async function getRecentUsage(rangeDays) {
     const totalMs = Number(row.totalMs || 0);
     day.totalMs += totalMs;
     day.latestUploadedAt = maxIsoTime(day.latestUploadedAt, row.uploadedAt || "");
+    // 区分来源：浏览器（web）还是 Android（app/android）
+    const sourceTag = String(row.source || "").toLowerCase();
+    const sourceLabel = sourceTag === "app" || sourceTag === "android" ? "Android"
+      : sourceTag === "web" || sourceTag === "browser" || sourceTag === "" ? "浏览器"
+      : sourceTag;
     day.devices.push({
       deviceId: row.deviceId,
       deviceAlias: row.deviceAlias || (row.deviceId === settings.deviceId ? settings.deviceAlias : "") || row.deviceId,
+      source: sourceTag,
+      sourceLabel,
       totalMs,
       uploadedAt: row.uploadedAt || ""
     });
@@ -557,10 +571,11 @@ async function getDayDetail(date) {
       SELECT
         device_id AS deviceId,
         device_alias AS deviceAlias,
+        source,
         total_ms AS totalMs,
         uploaded_at AS uploadedAt
       FROM usage_daily
-      WHERE date = ? AND source = 'web'
+      WHERE date = ?
       ORDER BY total_ms DESC
     `,
     params: [date]
@@ -571,18 +586,26 @@ async function getDayDetail(date) {
     sql: `
       SELECT device_id AS deviceId, hour, duration_ms AS durationMs
       FROM usage_hours
-      WHERE date = ? AND source = 'web'
+      WHERE date = ?
     `,
     params: [date]
   });
   if (!hoursResp.ok) return { ok: false, error: hoursResp.error };
 
-  const devices = dailyResp.rows.map(row => ({
-    deviceId: row.deviceId,
-    deviceAlias: row.deviceAlias || (row.deviceId === settings.deviceId ? settings.deviceAlias : "") || row.deviceId,
-    totalMs: Number(row.totalMs || 0),
-    uploadedAt: row.uploadedAt || ""
-  }));
+  const devices = dailyResp.rows.map(row => {
+    const sourceTag = String(row.source || "").toLowerCase();
+    const sourceLabel = sourceTag === "app" || sourceTag === "android" ? "Android"
+      : sourceTag === "web" || sourceTag === "browser" || sourceTag === "" ? "浏览器"
+      : sourceTag;
+    return {
+      deviceId: row.deviceId,
+      deviceAlias: row.deviceAlias || (row.deviceId === settings.deviceId ? settings.deviceAlias : "") || row.deviceId,
+      source: sourceTag,
+      sourceLabel,
+      totalMs: Number(row.totalMs || 0),
+      uploadedAt: row.uploadedAt || ""
+    };
+  });
 
   const hoursTotal = Array.from({ length: 24 }, (_, hour) => ({ hour, durationMs: 0 }));
   const hoursByDevice = {};

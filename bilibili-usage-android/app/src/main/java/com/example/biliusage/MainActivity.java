@@ -51,6 +51,8 @@ public class MainActivity extends android.app.Activity {
 
     private TextView heroTodayValue;
     private TextView heroTodaySubtitle;
+    private TextView heroAllDevicesValue;
+    private TextView heroAllDevicesSubtitle;
     private TextView heroPermissionChip;
     private TextView heroDeviceChip;
     private TextView statusBar;
@@ -133,6 +135,8 @@ public class MainActivity extends android.app.Activity {
             } catch (Exception ignore) {
                 // 拉取失败时保持原图
             }
+            // 上传后重新刷一下 hero 卡的「全设备总计」让数字看到本机上传金额
+            runOnUiThread(this::refreshTodayCard);
         }).start();
     }
 
@@ -177,32 +181,85 @@ public class MainActivity extends android.app.Activity {
         card.setBackgroundResource(getResources().getIdentifier("hero_bg", "drawable", getPackageName()));
         card.setPadding(dp(20), dp(20), dp(20), dp(20));
 
-        TextView label = new TextView(this);
-        label.setText("今日 B 站");
-        label.setTextColor(0xFFFFFFFF);
-        label.setAlpha(0.92f);
-        label.setTextSize(13f);
-        card.addView(label);
+        // 上半：两列 «本机今日» 与 «全设备今日总计»
+        LinearLayout split = new LinearLayout(this);
+        split.setOrientation(LinearLayout.HORIZONTAL);
+        card.addView(split, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        // 左列：本机今日
+        LinearLayout leftCol = new LinearLayout(this);
+        leftCol.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams leftLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        split.addView(leftCol, leftLp);
+
+        TextView labelLeft = new TextView(this);
+        labelLeft.setText("本机 B 站 · 今日");
+        labelLeft.setTextColor(0xFFFFFFFF);
+        labelLeft.setAlpha(0.92f);
+        labelLeft.setTextSize(12f);
+        leftCol.addView(labelLeft);
 
         heroTodayValue = new TextView(this);
         heroTodayValue.setText("0:00");
         heroTodayValue.setTextColor(0xFFFFFFFF);
-        heroTodayValue.setTextSize(40f);
+        heroTodayValue.setTextSize(34f);
         heroTodayValue.setTypeface(null, Typeface.BOLD);
         LinearLayout.LayoutParams vLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         vLp.topMargin = dp(2);
-        card.addView(heroTodayValue, vLp);
+        leftCol.addView(heroTodayValue, vLp);
 
         heroTodaySubtitle = new TextView(this);
         heroTodaySubtitle.setText("等待读取...");
         heroTodaySubtitle.setTextColor(0xFFFFFFFF);
         heroTodaySubtitle.setAlpha(0.92f);
-        heroTodaySubtitle.setTextSize(12f);
+        heroTodaySubtitle.setTextSize(11f);
         LinearLayout.LayoutParams sLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
         sLp.topMargin = dp(4);
-        card.addView(heroTodaySubtitle, sLp);
+        leftCol.addView(heroTodaySubtitle, sLp);
+
+        // 分隔线
+        View divider = new View(this);
+        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(dp(1), LinearLayout.LayoutParams.MATCH_PARENT);
+        divLp.leftMargin = dp(12);
+        divLp.rightMargin = dp(12);
+        divider.setBackgroundColor(0x33FFFFFF);
+        split.addView(divider, divLp);
+
+        // 右列：全设备今日总计
+        LinearLayout rightCol = new LinearLayout(this);
+        rightCol.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout.LayoutParams rightLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        split.addView(rightCol, rightLp);
+
+        TextView labelRight = new TextView(this);
+        labelRight.setText("全设备总计 · 今日");
+        labelRight.setTextColor(0xFFFFFFFF);
+        labelRight.setAlpha(0.92f);
+        labelRight.setTextSize(12f);
+        rightCol.addView(labelRight);
+
+        heroAllDevicesValue = new TextView(this);
+        heroAllDevicesValue.setText("0:00");
+        heroAllDevicesValue.setTextColor(0xFFFFFFFF);
+        heroAllDevicesValue.setTextSize(34f);
+        heroAllDevicesValue.setTypeface(null, Typeface.BOLD);
+        LinearLayout.LayoutParams vRLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        vRLp.topMargin = dp(2);
+        rightCol.addView(heroAllDevicesValue, vRLp);
+
+        heroAllDevicesSubtitle = new TextView(this);
+        heroAllDevicesSubtitle.setText("等待读取 D1...");
+        heroAllDevicesSubtitle.setTextColor(0xFFFFFFFF);
+        heroAllDevicesSubtitle.setAlpha(0.92f);
+        heroAllDevicesSubtitle.setTextSize(11f);
+        LinearLayout.LayoutParams sRLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        sRLp.topMargin = dp(4);
+        rightCol.addView(heroAllDevicesSubtitle, sRLp);
 
         LinearLayout chipRow = new LinearLayout(this);
         chipRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -559,15 +616,74 @@ public class MainActivity extends android.app.Activity {
                 ? mask(settings.accountId) + " · " + mask(settings.databaseId)
                 : "未配置 D1");
 
+        long localTotal = 0L;
         try {
             JSONObject payload = UsageCollector.collectDay(this, settings, Calendar.getInstance());
-            long total = payload.getLong("totalMs");
-            heroTodayValue.setText(formatBig(total));
+            localTotal = payload.getLong("totalMs");
+            heroTodayValue.setText(formatBig(localTotal));
             heroTodaySubtitle.setText(buildTodayBundleSummary(payload));
         } catch (Exception e) {
             heroTodayValue.setText("--");
             heroTodaySubtitle.setText("读取系统使用情况失败：" + (e.getMessage() == null ? "" : e.getMessage()));
         }
+
+        // 右侧「全设备今日总计」需要从 D1 拉取，后台线程执行
+        refreshAllDevicesTodayChip(settings, localTotal);
+    }
+
+    /** 从 D1 拉取今日所有设备总计（含本机、含 Chrome 插件上传），并与本机未上传部分取最大避免丢多。 */
+    private void refreshAllDevicesTodayChip(SettingsStore settings, long localTotal) {
+        if (heroAllDevicesValue == null) return;
+        if (!settings.isCloudConfigured()) {
+            heroAllDevicesValue.setText(formatBig(localTotal));
+            heroAllDevicesSubtitle.setText("未配置 D1，仅含本机");
+            return;
+        }
+        String today = formatDate(Calendar.getInstance());
+        String selfId = settings.deviceId;
+        new Thread(() -> {
+            try {
+                JSONArray rows = new D1Client(settings).queryRecentDays(today, today);
+                long sumOthers = 0L;
+                long selfRow = 0L;
+                int deviceCount = 0;
+                if (rows != null) {
+                    for (int i = 0; i < rows.length(); i++) {
+                        JSONObject row = rows.getJSONObject(i);
+                        String date = row.optString("date", "");
+                        if (!today.equals(date)) continue;
+                        long total = row.optLong("totalMs", 0L);
+                        String id = row.optString("deviceId", "");
+                        if (selfId.equals(id)) selfRow += total;
+                        else sumOthers += total;
+                        deviceCount++;
+                    }
+                }
+                // 本机部分取 D1(已上传) 与 本地 UsageStats 的较大者，避免未上传会造成少计
+                long localShown = Math.max(selfRow, localTotal);
+                long grandTotal = sumOthers + localShown;
+                long fSumOthers = sumOthers;
+                long fSelfRow = selfRow;
+                int fDeviceCount = deviceCount;
+                long fGrand = grandTotal;
+                runOnUiThread(() -> {
+                    heroAllDevicesValue.setText(formatBig(fGrand));
+                    StringBuilder sb = new StringBuilder();
+                    if (fDeviceCount > 0) sb.append(fDeviceCount).append(" 台设备");
+                    else sb.append("仅本机");
+                    sb.append(" · 本机贡献 ").append(formatDuration(localShown));
+                    if (fSumOthers > 0L) sb.append(" + 其他 ").append(formatDuration(fSumOthers));
+                    if (localShown > fSelfRow) sb.append(" · 含未上传 ").append(formatDuration(localShown - fSelfRow));
+                    heroAllDevicesSubtitle.setText(sb.toString());
+                });
+            } catch (Exception e) {
+                final String msg = e.getMessage() == null ? "拉取失败" : e.getMessage();
+                runOnUiThread(() -> {
+                    heroAllDevicesValue.setText(formatBig(localTotal));
+                    heroAllDevicesSubtitle.setText("D1 读取失败：" + msg);
+                });
+            }
+        }).start();
     }
 
     private String buildTodayBundleSummary(JSONObject payload) throws Exception {
@@ -660,18 +776,66 @@ public class MainActivity extends android.app.Activity {
                     devicesByDate.get(date)
             ));
         }
+
+        // 本地兑底：如果今天 D1 还没有本机设备的上传，直接拿 UsageStatsManager 查本机今日累计，
+        // 贴到今天那个 bucket 上，让用户进入 app 就能看到「今天」柱条高度。
+        try {
+            String todayKey = formatDate(toCal);
+            if (UsageCollector.hasUsageAccess(this)) {
+                UsageCollector.DayBuckets local = UsageCollector.queryDayBuckets(
+                        this,
+                        startOfDay(toCal).getTimeInMillis(),
+                        endOfDay(toCal).getTimeInMillis()
+                );
+                long localTotal = 0L;
+                if (local != null) {
+                    for (long v : local.byHour) localTotal += v;
+                }
+                if (localTotal > 0L) {
+                    String selfId = settings.deviceId;
+                    String selfAlias = settings.deviceAlias.isEmpty() ? selfId : settings.deviceAlias;
+                    int todayIdx = -1;
+                    for (int i = 0; i < buckets.size(); i++) {
+                        if (todayKey.equals(buckets.get(i).date)) { todayIdx = i; break; }
+                    }
+                    UsageChartView.DayBucket today = todayIdx >= 0 ? buckets.get(todayIdx) : null;
+                    boolean hasSelf = false;
+                    if (today != null) {
+                        for (UsageChartView.DeviceUsage d : today.devices) {
+                            if (selfId.equals(d.deviceId)) { hasSelf = true; break; }
+                        }
+                    }
+                    if (!hasSelf) {
+                        List<UsageChartView.DeviceUsage> mergedDevices = new ArrayList<>();
+                        if (today != null) mergedDevices.addAll(today.devices);
+                        mergedDevices.add(new UsageChartView.DeviceUsage(
+                                selfId,
+                                selfAlias + " · 本机未上传",
+                                localTotal,
+                                "本地缓存"
+                        ));
+                        mergedDevices.sort((a, c) -> Long.compare(c.totalMs, a.totalMs));
+                        long newTotal = (today == null ? 0L : today.totalMs) + localTotal;
+                        UsageChartView.DayBucket merged = new UsageChartView.DayBucket(
+                                todayKey, shortLabel(todayKey), newTotal, mergedDevices);
+                        if (todayIdx >= 0) buckets.set(todayIdx, merged);
+                        else buckets.add(merged);
+                    }
+                }
+            }
+        } catch (Exception ignore) {
+            // 本地兑底失败不影响 D1 趋势呈现
+        }
+
         currentDays = buckets;
 
         runOnUiThread(() -> {
             chart.setDays(currentDays);
-            // 默认选中最近一个有数据的日，没有则选今天
-            int idx = currentDays.size() - 1;
-            for (int i = currentDays.size() - 1; i >= 0; i--) {
-                if (currentDays.get(i).totalMs > 0) { idx = i; break; }
-            }
+            // 默认选中「今天」（范围末尾），让用户一进来就看到今日详情。
+            int idx = currentDays.isEmpty() ? -1 : currentDays.size() - 1;
             chart.setSelectedIndex(idx);
             updateRangeTabsUi();
-            if (idx >= 0 && !currentDays.isEmpty()) {
+            if (idx >= 0) {
                 refreshDeviceCard(currentDays.get(idx));
                 loadHoursForSelected(currentDays.get(idx));
             } else {
@@ -869,6 +1033,24 @@ public class MainActivity extends android.app.Activity {
 
     private String formatDate(Calendar calendar) {
         return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(calendar.getTime());
+    }
+
+    private Calendar startOfDay(Calendar src) {
+        Calendar c = (Calendar) src.clone();
+        c.set(Calendar.HOUR_OF_DAY, 0);
+        c.set(Calendar.MINUTE, 0);
+        c.set(Calendar.SECOND, 0);
+        c.set(Calendar.MILLISECOND, 0);
+        return c;
+    }
+
+    private Calendar endOfDay(Calendar src) {
+        Calendar c = (Calendar) src.clone();
+        c.set(Calendar.HOUR_OF_DAY, 23);
+        c.set(Calendar.MINUTE, 59);
+        c.set(Calendar.SECOND, 59);
+        c.set(Calendar.MILLISECOND, 999);
+        return c;
     }
 
     private String shortLabel(String date) {

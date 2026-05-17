@@ -42,7 +42,7 @@ final class UsageCollector {
     };
     /** 一次 queryEvents 拉取的最大窗口（30 天）。超过则分段调用避免 binder 超时。 */
     private static final long QUERY_WINDOW_MS = 30L * 24 * 3600 * 1000;
-    static final String APP_VERSION = "1.2.0";
+    static final String APP_VERSION = "1.2.6";
     static final int SCHEMA_VERSION = 2;
 
     static boolean hasUsageAccess(Context context) {
@@ -72,70 +72,23 @@ final class UsageCollector {
         days = Math.max(1, days);
         List<JSONObject> result = new ArrayList<>();
 
-        // 一次性划定范围，减少 binder 来回
         Calendar today = Calendar.getInstance();
         Calendar endDay = (Calendar) today.clone();
         if (!includeToday) endDay.add(Calendar.DAY_OF_MONTH, -1);
-        Calendar startDay = (Calendar) endDay.clone();
-        startDay.add(Calendar.DAY_OF_MONTH, -(days - 1));
 
-        Calendar startOfRange = (Calendar) startDay.clone();
-        startOfRange.set(Calendar.HOUR_OF_DAY, 0);
-        startOfRange.set(Calendar.MINUTE, 0);
-        startOfRange.set(Calendar.SECOND, 0);
-        startOfRange.set(Calendar.MILLISECOND, 0);
-        Calendar endOfRange = (Calendar) endDay.clone();
-        endOfRange.set(Calendar.HOUR_OF_DAY, 0);
-        endOfRange.set(Calendar.MINUTE, 0);
-        endOfRange.set(Calendar.SECOND, 0);
-        endOfRange.set(Calendar.MILLISECOND, 0);
-        endOfRange.add(Calendar.DAY_OF_MONTH, 1);
-
-        DayBuckets[] perDay = new DayBuckets[days];
-        for (int i = 0; i < days; i++) perDay[i] = new DayBuckets();
-
-        // 一次拉 events，按所属日划到每天桍。
-        long rangeStartMs = startOfRange.getTimeInMillis();
-        long rangeEndMs = endOfRange.getTimeInMillis();
-        UsageStatsManager manager = (UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
-        if (manager != null) {
-            long queryStart = rangeStartMs - 2L * 3600 * 1000;
-            long queryEnd = rangeEndMs;
-            java.util.Map<String, Long> foregroundEnter = new LinkedHashMap<>();
-            long cursor = queryStart;
-            while (cursor < queryEnd) {
-                long next = Math.min(cursor + QUERY_WINDOW_MS, queryEnd);
-                android.app.usage.UsageEvents events = manager.queryEvents(cursor, next);
-                android.app.usage.UsageEvents.Event ev = new android.app.usage.UsageEvents.Event();
-                while (events != null && events.hasNextEvent()) {
-                    events.getNextEvent(ev);
-                    String pkg = ev.getPackageName();
-                    if (pkg == null || !isTargetPackage(pkg)) continue;
-                    int type = ev.getEventType();
-                    long ts = ev.getTimeStamp();
-                    if (type == android.app.usage.UsageEvents.Event.MOVE_TO_FOREGROUND) {
-                        foregroundEnter.put(pkg, ts);
-                    } else if (type == android.app.usage.UsageEvents.Event.MOVE_TO_BACKGROUND
-                            || type == android.app.usage.UsageEvents.Event.ACTIVITY_PAUSED
-                            || type == android.app.usage.UsageEvents.Event.ACTIVITY_STOPPED) {
-                        Long enter = foregroundEnter.remove(pkg);
-                        if (enter != null && ts > enter) {
-                            distributeToDays(perDay, startOfRange, days, pkg, enter, ts);
-                        }
-                    }
-                }
-                cursor = next;
-            }
-            for (Map.Entry<String, Long> entry : foregroundEnter.entrySet()) {
-                distributeToDays(perDay, startOfRange, days, entry.getKey(), entry.getValue(), rangeEndMs);
-            }
-        }
-
-        // 输出：从最近一天往老（跟原有顺序保持一致）
-        for (int i = days - 1; i >= 0; i--) {
-            Calendar dayCal = (Calendar) startOfRange.clone();
-            dayCal.add(Calendar.DAY_OF_MONTH, i);
-            result.add(toPayload(settings, dayCal, perDay[i]));
+        // 从最近一天往老（跟原有顺序保持一致），每天单独调 queryDayBuckets（=纯 stats）
+        for (int i = 0; i < days; i++) {
+            Calendar dayCal = (Calendar) endDay.clone();
+            dayCal.add(Calendar.DAY_OF_MONTH, -i);
+            Calendar dayStart = (Calendar) dayCal.clone();
+            dayStart.set(Calendar.HOUR_OF_DAY, 0);
+            dayStart.set(Calendar.MINUTE, 0);
+            dayStart.set(Calendar.SECOND, 0);
+            dayStart.set(Calendar.MILLISECOND, 0);
+            Calendar dayEnd = (Calendar) dayStart.clone();
+            dayEnd.add(Calendar.DAY_OF_MONTH, 1);
+            DayBuckets buckets = queryDayBuckets(context, dayStart.getTimeInMillis(), dayEnd.getTimeInMillis());
+            result.add(toPayload(settings, dayStart, buckets));
         }
         return result;
     }
@@ -184,47 +137,127 @@ final class UsageCollector {
         return (int) Math.floor(delta / (double) (24L * 3600 * 1000));
     }
 
-    /** 把 [startMs, endMs) 区间内的前台事件回放，按小时和包名分桶。 */
+    /** 直接读取系统「数字健康」级别的统计：跟系统设置完全一致。
+     *  不用 events 自己回放（不同 ROM 事件丢失严重），只用 queryUsageStats(INTERVAL_DAILY)。
+     *  小时分布无法精准，故近似处理：仅当 byHour 全 0 时把总量贴到当前小时；否则保留事件分布形状。
+     */
     static DayBuckets queryDayBuckets(Context context, long startMs, long endMs) {
-        UsageStatsManager manager = (UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
         DayBuckets buckets = new DayBuckets();
+        UsageStatsManager manager = (UsageStatsManager) context.getSystemService(Context.USAGE_STATS_SERVICE);
         if (manager == null) return buckets;
 
-        // 为了在某些设备上确保事件完整，往左多取 2 小时，再过滤
-        long queryStart = startMs - 2L * 3600 * 1000;
-        long queryEnd = endMs;
+        // 1) 主数据：queryUsageStats — 跟系统设置的"数字健康/屏幕使用时间"一致
+        long statsTotal = 0L;
+        Map<String, Long> statsPerBundle = new LinkedHashMap<>();
+        try {
+            List<android.app.usage.UsageStats> list = manager.queryUsageStats(
+                    UsageStatsManager.INTERVAL_DAILY, startMs, endMs);
+            if (list != null) {
+                for (android.app.usage.UsageStats us : list) {
+                    if (us == null) continue;
+                    String pkg = us.getPackageName();
+                    if (pkg == null || !isTargetPackage(pkg)) continue;
+                    // 严格过滤：UsageStats 的 firstTimeStamp/lastTimeStamp 必须落在本日内，
+                    // 防止有些 ROM 把跨天会话整段计到某一天。
+                    long fts = us.getFirstTimeStamp();
+                    long lts = us.getLastTimeStamp();
+                    // 与查询区间无交集就丢
+                    if (lts < startMs || fts >= endMs) continue;
+                    long fg = us.getTotalTimeInForeground();
+                    if (fg <= 0L) continue;
+                    statsTotal += fg;
+                    statsPerBundle.merge(pkg, fg, Long::sum);
+                }
+            }
+        } catch (Exception ignore) {
+            // 拿不到就显示 0
+        }
 
-        // 维护各包名当前是否在前台 & 进入前台的时间戳
-        Map<String, Long> foregroundEnter = new LinkedHashMap<>();
-        long cursor = queryStart;
-        while (cursor < queryEnd) {
-            long next = Math.min(cursor + QUERY_WINDOW_MS, queryEnd);
-            UsageEvents events = manager.queryEvents(cursor, next);
+        // 2) 写入 byBundle = stats
+        for (Map.Entry<String, Long> entry : statsPerBundle.entrySet()) {
+            buckets.byBundle.put(entry.getKey(), entry.getValue());
+        }
+
+        if (statsTotal <= 0L) return buckets;
+
+        // 3) 小时分布：尝试用 events 仅获取「形状」（相对占比），再按 stats 总量归一化。
+        //    events 失败/无数据时，把总量全部贴到当前小时（用户看到 0 也能定位）。
+        long[] hourShape = tryGetHourShape(manager, startMs, endMs);
+        long shapeSum = 0L;
+        for (long v : hourShape) shapeSum += v;
+        if (shapeSum > 0L) {
+            double scale = (double) statsTotal / (double) shapeSum;
+            long sumWritten = 0L;
+            int lastNonZero = -1;
+            for (int h = 0; h < 24; h++) {
+                if (hourShape[h] <= 0L) continue;
+                long v = Math.round(hourShape[h] * scale);
+                buckets.byHour[h] = v;
+                sumWritten += v;
+                lastNonZero = h;
+            }
+            // 修正取整误差
+            long diff = statsTotal - sumWritten;
+            if (lastNonZero >= 0 && diff != 0L) {
+                buckets.byHour[lastNonZero] = Math.max(0L, buckets.byHour[lastNonZero] + diff);
+            }
+        } else {
+            // 完全没有事件形状：贴到当前小时（若是今天）或最后一小时（若是历史天）
+            long bucketTs = Math.min(endMs - 1, System.currentTimeMillis());
+            if (bucketTs < startMs || bucketTs >= endMs) bucketTs = endMs - 1;
+            int curHour = hourOfLocal(bucketTs);
+            if (curHour >= 0 && curHour < 24) buckets.byHour[curHour] += statsTotal;
+        }
+        return buckets;
+    }
+
+    /** 用 events 获取本日的小时占比形状（不返回精确时长，只返回相对比例）。 */
+    private static long[] tryGetHourShape(UsageStatsManager manager, long startMs, long endMs) {
+        long[] hours = new long[24];
+        try {
+            // 仅查询本日内的事件，避免被前/后两小时跨天事件污染
+            UsageEvents events = manager.queryEvents(startMs, endMs);
+            if (events == null) return hours;
+            Map<String, Long> foregroundEnter = new LinkedHashMap<>();
             UsageEvents.Event event = new UsageEvents.Event();
-            while (events != null && events.hasNextEvent()) {
+            while (events.hasNextEvent()) {
                 events.getNextEvent(event);
                 String pkg = event.getPackageName();
                 if (pkg == null || !isTargetPackage(pkg)) continue;
                 int type = event.getEventType();
                 long ts = event.getTimeStamp();
+                if (ts < startMs) ts = startMs;
+                if (ts > endMs) ts = endMs;
                 if (type == UsageEvents.Event.MOVE_TO_FOREGROUND) {
                     foregroundEnter.put(pkg, ts);
                 } else if (type == UsageEvents.Event.MOVE_TO_BACKGROUND
                         || type == UsageEvents.Event.ACTIVITY_PAUSED
                         || type == UsageEvents.Event.ACTIVITY_STOPPED) {
                     Long enter = foregroundEnter.remove(pkg);
-                    if (enter != null && ts > enter) {
-                        accumulate(buckets, pkg, enter, ts, startMs, endMs);
-                    }
+                    if (enter != null && ts > enter) addToHourShape(hours, enter, ts);
                 }
             }
+            // 至 endMs 仍在前台 → 贴到 endMs
+            for (Map.Entry<String, Long> e : foregroundEnter.entrySet()) {
+                addToHourShape(hours, e.getValue(), endMs);
+            }
+        } catch (Exception ignore) {
+            // 不影响主流程
+        }
+        return hours;
+    }
+
+    /** 把一段时间按小时拆分加到 hours[] 上（不再除以总量，只用相对值描形状）。 */
+    private static void addToHourShape(long[] hours, long enter, long leave) {
+        if (leave <= enter) return;
+        long cursor = enter;
+        while (cursor < leave) {
+            long hourEnd = nextHourStart(cursor);
+            long next = Math.min(hourEnd, leave);
+            int h = hourOfLocal(cursor);
+            if (h >= 0 && h < 24) hours[h] += (next - cursor);
             cursor = next;
         }
-        // 若到 endMs 仍未结束（比如用户当前正在使用），按 endMs 截断
-        for (Map.Entry<String, Long> entry : foregroundEnter.entrySet()) {
-            accumulate(buckets, entry.getKey(), entry.getValue(), endMs, startMs, endMs);
-        }
-        return buckets;
     }
 
     /** 把一段 [enter, leave) 切到 [startMs, endMs) 之内，再按小时拆。 */
@@ -324,6 +357,12 @@ final class UsageCollector {
         void addBundle(String pkg, long ms) {
             if (pkg == null || ms <= 0) return;
             byBundle.merge(pkg, ms, Long::sum);
+        }
+
+        long totalMs() {
+            long sum = 0L;
+            for (long v : byHour) sum += v;
+            return sum;
         }
     }
 }

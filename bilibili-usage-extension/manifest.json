@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Bilibili Usage Tracker",
   "description": "Track daily Bilibili web usage and upload summaries to Cloudflare D1 through a Worker.",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "permissions": [
     "alarms",
     "idle",
