@@ -89,6 +89,8 @@ public final class DeviceBreakdownView extends View {
         setMeasuredDimension(width, contentH);
     }
 
+    private static final int[] DEVICE_LINE_COLORS = HourChartView.LINE_COLORS;
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -108,13 +110,21 @@ public final class DeviceBreakdownView extends View {
             UsageChartView.DeviceUsage d = devices.get(i);
             float top = i * rowH + 4f * density;
 
+            // 设备颜色
+            int color = (d.colorIndex >= 0 && d.colorIndex < DEVICE_LINE_COLORS.length)
+                    ? DEVICE_LINE_COLORS[d.colorIndex] : DEVICE_LINE_COLORS[i % DEVICE_LINE_COLORS.length];
+            dotP.setColor(color);
+            barP.setColor(color);
+            int fillAlpha = 0x33;
+            int fillColor = (color & 0x00FFFFFF) | (fillAlpha << 24);
+            barBgP.setColor(fillColor);
+
             float dotR = 4f * density;
             float dotCx = left + dotR;
             float dotCy = top + 14f * density;
             canvas.drawCircle(dotCx, dotCy, dotR, dotP);
 
             float nameX = dotCx + dotR + 8f * density;
-            // 右侧时间文本优先，名称多余部分裁断加省略号
             String timeText = UsageChartView.formatShortDuration(d.totalMs);
             float timeWidth = timeP.measureText(timeText);
             float nameMaxWidth = right - nameX - timeWidth - 12f * density;

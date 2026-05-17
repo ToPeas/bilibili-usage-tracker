@@ -132,11 +132,15 @@ final class D1Client {
         return response.getJSONArray("result").getJSONObject(0).optJSONArray("results");
     }
 
-    /** 拉取某天 24 小时分布（所有设备汇总）。 */
+    /** 拉取某天 24 小时分布（含 source / device_id / alias）。 */
     JSONArray queryDayHours(String date) throws Exception {
         ensureSchema();
         JSONObject response = execute(new JSONObject()
-                .put("sql", "SELECT device_id AS deviceId, hour, duration_ms AS durationMs FROM usage_hours WHERE date = ?")
+                .put("sql", "SELECT h.device_id AS deviceId, h.source, h.hour, h.duration_ms AS durationMs, " +
+                        "COALESCE(d.device_alias, '') AS deviceAlias " +
+                        "FROM usage_hours h " +
+                        "LEFT JOIN usage_daily d ON d.date = h.date AND d.source = h.source AND d.device_id = h.device_id " +
+                        "WHERE h.date = ?")
                 .put("params", new JSONArray().put(date)));
         return response.getJSONArray("result").getJSONObject(0).optJSONArray("results");
     }

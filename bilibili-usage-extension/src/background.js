@@ -580,6 +580,16 @@ async function getDayDetail(date) {
   });
   if (!dailyResp.ok) return { ok: false, error: dailyResp.error };
 
+  const hoursResp = await queryD1(settings, {
+    sql: `
+      SELECT device_id AS deviceId, source, hour, duration_ms AS durationMs
+      FROM usage_hours
+      WHERE date = ?
+    `,
+    params: [date]
+  });
+  if (!hoursResp.ok) return { ok: false, error: hoursResp.error };
+
   const devices = dailyResp.rows.map(row => {
     const sourceTag = String(row.source || "").toLowerCase();
     const sourceLabel = sourceTag === "app" || sourceTag === "android" ? "Android"
@@ -595,11 +605,34 @@ async function getDayDetail(date) {
     };
   });
 
+  // 汇总 hours：全设备合并 + 各设备分开
+  const hoursTotal = Array.from({ length: 24 }, (_, hour) => ({ hour, durationMs: 0 }));
+  const hoursByDevice = {};
+  for (const row of hoursResp.rows) {
+    const hour = Math.max(0, Math.min(23, Math.floor(Number(row.hour) || 0)));
+    const ms = Number(row.durationMs || 0);
+    hoursTotal[hour].durationMs += ms;
+    const id = String(row.deviceId || "");
+    if (!hoursByDevice[id]) {
+      // 找到对应设备信息
+      const dev = devices.find(d => d.deviceId === id);
+      hoursByDevice[id] = {
+        source: dev?.source || String(row.source || "").toLowerCase(),
+        sourceLabel: dev?.sourceLabel || "",
+        alias: dev?.deviceAlias || id.slice(0, 8),
+        hours: Array.from({ length: 24 }, (_, h) => ({ hour: h, durationMs: 0 }))
+      };
+    }
+    hoursByDevice[id].hours[hour].durationMs += ms;
+  }
+
   return {
     ok: true,
     date,
     totalMs: devices.reduce((s, d) => s + d.totalMs, 0),
-    devices
+    devices,
+    hours: hoursTotal,
+    hoursByDevice
   };
 }
 

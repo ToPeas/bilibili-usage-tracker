@@ -25,7 +25,7 @@ final class UsageCollector {
             "tv.danmaku.bilibilihd",
             "com.bilibili.app.in"
     };
-    static final String APP_VERSION = "1.3.5";
+    static final String APP_VERSION = "1.3.8";
     static final int SCHEMA_VERSION = 2;
 
     static boolean hasUsageAccess(Context context) {

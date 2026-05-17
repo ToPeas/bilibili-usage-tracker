@@ -16,6 +16,15 @@ const INK = "#1F1F23";
 const INK_SOFT = "#6B6470";
 const INK_MUTE = "#B6AFB9";
 
+// 多设备调色板：[粉(web), 蓝(android), 绿, 橙, 紫]
+const DEVICE_COLORS = [
+  { line: "#FB7299", fill: "rgba(251,114,153,0.18)" },
+  { line: "#23ADE5", fill: "rgba(35,173,229,0.15)" },
+  { line: "#52C41A", fill: "rgba(82,196,26,0.13)" },
+  { line: "#FA8C16", fill: "rgba(250,140,22,0.13)" },
+  { line: "#722ED1", fill: "rgba(114,46,209,0.13)" },
+];
+
 const DPR = window.devicePixelRatio || 1;
 
 /** -------- DOM -------- */
@@ -29,6 +38,9 @@ const rangeTabs = $("rangeTabs");
 const rangeSummary = $("rangeSummary");
 const trendCanvas = $("trendChart");
 const trendLegend = $("trendLegend");
+const hourChart = $("hourChart");
+const hourChartWrap = $("hourChartWrap");
+const hourTooltip = $("hourTooltip");
 const dayTitle = $("dayTitle");
 const daySub = $("daySub");
 const deviceList = $("deviceList");
@@ -219,24 +231,249 @@ async function refreshDayDetail() {
   daySub.textContent = resp.devices.length
     ? `共 ${resp.devices.length} 台设备 · 点击趋势图查看其他天`
     : "这一天暂无设备上报";
-  renderDeviceList(resp.devices || []);
+  drawHourChart(resp.hours || [], resp.hoursByDevice || {}, resp.devices || []);
+  renderDeviceList(resp.devices || [], resp.hoursByDevice || {});
 }
 
-function renderDeviceList(devices) {
+// 24h 图缓存（用于 tooltip 计算）
+let _hourSeries = [];
+let _hourXs = [];
+let _hourPad = null;
+let _hourNiceMax = 0;
+
+/** 按设备在列表中的序号分配颜色，每台设备独立一种颜色（不再区分 source） */
+function assignSeriesColors(deviceIds, hoursByDevice) {
+  return deviceIds.map((id, idx) => {
+    const info = hoursByDevice[id] || {};
+    const colorIdx = idx % DEVICE_COLORS.length;
+    return { id, info, colorIdx, color: DEVICE_COLORS[colorIdx] };
+  });
+}
+
+/**
+ * 24h 多设备多色折线图。
+ * @param {Array}  hours         全设备汇总 [{hour, durationMs}×24]
+ * @param {Object} hoursByDevice { deviceId: { source, sourceLabel, alias, hours:[…×24] } }
+ * @param {Array}  devices       [{deviceId, source, sourceLabel, deviceAlias}]
+ */
+function drawHourChart(hours, hoursByDevice, devices) {
+  if (!hourChart) return;
+
+  const deviceIds = Object.keys(hoursByDevice || {});
+  const hasData = deviceIds.length > 0;
+  if (hourChartWrap) hourChartWrap.style.display = hasData ? "" : "none";
+  if (!hasData) return;
+
+  // 用统一的颜色分配（与 renderDeviceList 共享）
+  const seriesMeta = assignSeriesColors(deviceIds, hoursByDevice);
+  const series = seriesMeta.map(({ id, info, colorIdx, color }) => {
+    const label = info.alias || id.slice(0, 8);
+    const srcLabel = info.sourceLabel || srcDisplayLabel(info.source || "");
+    return { id, label, srcLabel, colorIdx,
+             data: normalizeHours(info.hours || []), color };
+  });
+
+  const ctx = hourChart.getContext("2d");
+  resizeCanvas(hourChart, ctx);
+  const w = hourChart.clientWidth;
+  const h = hourChart.clientHeight;
+  ctx.clearRect(0, 0, w, h);
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, w, h);
+
+  const padding = { top: 28, right: 12, bottom: 22, left: 48 };
+  const innerW = w - padding.left - padding.right;
+  const innerH = h - padding.top - padding.bottom;
+
+  let rawMax = 0;
+  for (const s of series) for (const pt of s.data) rawMax = Math.max(rawMax, pt.durationMs || 0);
+  if (rawMax <= 0) {
+    ctx.fillStyle = INK_MUTE; ctx.font = "12px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("该天暂无时段数据", w / 2, h / 2); return;
+  }
+  const niceMax = niceCeilMs(rawMax);
+
+  // 图例（右上角，从右向左：色块 → 文字 → 间距）
+  ctx.font = "9px sans-serif"; ctx.textBaseline = "middle";
+  let lx = w - padding.right;
+  for (let i = series.length - 1; i >= 0; i--) {
+    const s = series[i];
+    const lbl = `${s.srcLabel}·${s.label}`;
+    const tw = ctx.measureText(lbl).width;
+    // 从右往左：间距4 → 文字 → 间距4 → 色块10 → 间距4
+    lx -= 4;
+    lx -= tw;
+    const textX = lx;
+    lx -= 4;
+    // 色块
+    ctx.fillStyle = s.color.line;
+    ctx.fillRect(lx - 10, padding.top / 2 - 1.5, 10, 3);
+    lx -= 10;
+    // 文字
+    ctx.fillStyle = s.color.line;
+    ctx.fillText(lbl, textX, padding.top / 2);
+    lx -= 4;
+  }
+
+  // Y 轴
+  ctx.strokeStyle = GRID; ctx.lineWidth = 1;
+  ctx.fillStyle = INK_MUTE; ctx.font = "10px sans-serif";
+  ctx.textAlign = "right"; ctx.textBaseline = "middle";
+  for (let i = 0; i <= 4; i++) {
+    const y = padding.top + (innerH * i) / 4;
+    ctx.beginPath(); ctx.moveTo(padding.left, y); ctx.lineTo(padding.left + innerW, y); ctx.stroke();
+    ctx.fillText(axisLabelMs(niceMax * (1 - i / 4)), padding.left - 4, y);
+  }
+
+  const n = 24;
+  const stepX = innerW / (n - 1);
+  const xs = Array.from({ length: n }, (_, i) => padding.left + stepX * i);
+
+  for (const s of series) {
+    s._ys = s.data.map(pt => {
+      const ms = pt.durationMs || 0;
+      if (ms <= 0) return padding.top + innerH;
+      return Math.min(padding.top + innerH - (ms / niceMax) * innerH, padding.top + innerH - 2);
+    });
+  }
+
+  // 填充面积
+  for (let si = series.length - 1; si >= 0; si--) {
+    const s = series[si];
+    const grad = ctx.createLinearGradient(0, padding.top, 0, padding.top + innerH);
+    grad.addColorStop(0, s.color.fill);
+    grad.addColorStop(1, s.color.fill.replace(/[\d.]+\)$/, "0.01)"));
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.moveTo(xs[0], padding.top + innerH); ctx.lineTo(xs[0], s._ys[0]);
+    for (let i = 1; i < n; i++) {
+      const mx = (xs[i-1]+xs[i])/2;
+      ctx.bezierCurveTo(mx, s._ys[i-1], mx, s._ys[i], xs[i], s._ys[i]);
+    }
+    ctx.lineTo(xs[n-1], padding.top + innerH); ctx.closePath(); ctx.fill();
+  }
+
+  // 折线 + 圆点
+  for (const s of series) {
+    ctx.strokeStyle = s.color.line; ctx.lineWidth = 1.8;
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.moveTo(xs[0], s._ys[0]);
+    for (let i = 1; i < n; i++) {
+      const mx = (xs[i-1]+xs[i])/2;
+      ctx.bezierCurveTo(mx, s._ys[i-1], mx, s._ys[i], xs[i], s._ys[i]);
+    }
+    ctx.stroke();
+    for (let i = 0; i < n; i++) {
+      if ((s.data[i]?.durationMs || 0) <= 0) continue;
+      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(xs[i], s._ys[i], 3, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = s.color.line; ctx.beginPath(); ctx.arc(xs[i], s._ys[i], 1.9, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  // X 轴
+  ctx.fillStyle = INK_SOFT; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.font = "9px sans-serif";
+  const stepLabel = innerW/24>=14?1:innerW/24>=9?2:innerW/24>=6?3:6;
+  for (let i = 0; i < 24; i++) {
+    if (i%stepLabel!==0 && i!==23) continue;
+    ctx.fillText(`${i}`, xs[i], padding.top + innerH + 4);
+  }
+
+  // 缓存供 tooltip 使用
+  _hourSeries = series; _hourXs = xs; _hourPad = padding; _hourNiceMax = niceMax;
+
+  // 绑定 mousemove（每次重画后重绑，确保最新数据）
+  hourChart.onmousemove = (e) => showHourTooltip(e, w, padding);
+  hourChart.onmouseleave = () => { if (hourTooltip) hourTooltip.style.display = "none"; };
+}
+
+function showHourTooltip(e, canvasW, padding) {
+  if (!hourTooltip || !_hourSeries.length || !_hourXs.length) return;
+  const rect = hourChart.getBoundingClientRect();
+  const mx = (e.clientX - rect.left) * (hourChart.width / rect.width);
+  if (!padding) return;
+  const innerW = canvasW - padding.left - padding.right;
+  const stepX = innerW / 23;
+  let hour = Math.round((mx - padding.left) / stepX);
+  hour = Math.max(0, Math.min(23, hour));
+
+  const lines = [];
+  for (const s of _hourSeries) {
+    const ms = s.data[hour]?.durationMs || 0;
+    if (ms <= 0) continue;
+    lines.push({ label: `${s.srcLabel}·${s.label}`, ms, color: s.color.line });
+  }
+
+  let html = `<div style="font-weight:600;font-size:11px;margin-bottom:4px;color:#1f1f23">${hour}:00 – ${hour+1}:00</div>`;
+  if (lines.length === 0) {
+    html += `<div style="color:#b6afb9;font-size:10px">无使用记录</div>`;
+  } else {
+    for (const ln of lines) {
+      html += `<div style="display:flex;align-items:center;gap:5px;margin-top:2px">
+        <span style="width:8px;height:8px;border-radius:50%;background:${ln.color};flex-shrink:0"></span>
+        <span style="font-size:10px;color:#1f1f23">${escapeHtml(ln.label)}</span>
+        <span style="font-size:10px;color:#6b6470;margin-left:auto;padding-left:8px">${formatDuration(ln.ms)}</span>
+      </div>`;
+    }
+  }
+  hourTooltip.innerHTML = html;
+  hourTooltip.style.display = "block";
+
+  // 定位：跟随鼠标，避免溢出
+  const wrapRect = hourChartWrap.getBoundingClientRect();
+  let tx = e.clientX - wrapRect.left + 12;
+  if (tx + 130 > wrapRect.width) tx = e.clientX - wrapRect.left - 130 - 8;
+  let ty = e.clientY - wrapRect.top - 10;
+  if (ty < 0) ty = 0;
+  hourTooltip.style.left = tx + "px";
+  hourTooltip.style.top = ty + "px";
+}
+
+function normalizeHours(hours) {
+  const result = Array.from({ length: 24 }, (_, hour) => ({ hour, durationMs: 0 }));
+  for (let i = 0; i < hours.length; i++) {
+    const item = hours[i] || {};
+    const hour = Number.isInteger(item.hour) ? item.hour : i;
+    if (hour >= 0 && hour <= 23) result[hour].durationMs = Math.max(0, Number(item.durationMs || 0));
+  }
+  return result;
+}
+
+function srcDisplayLabel(src) {
+  src = (src || "").toLowerCase();
+  if (src === "android" || src === "app") return "Android";
+  if (src === "web" || src === "browser" || src === "chrome") return "浏览器";
+  return src || "未知";
+}
+
+function renderDeviceList(devices, hoursByDevice) {
   deviceList.innerHTML = "";
-  if (!devices.length) {
+  if (!devices || !devices.length) {
     const li = document.createElement("li");
     li.innerHTML = `<span class="device-name" style="color:${INK_SOFT}">这一天没有设备上报</span>`;
     deviceList.appendChild(li);
     return;
   }
+  // 计算每个设备的颜色索引（与 24h 图完全对应）
+  const colorMap = {};
+  if (hoursByDevice) {
+    const metas = assignSeriesColors(Object.keys(hoursByDevice), hoursByDevice);
+    for (const m of metas) colorMap[m.id] = m.color;
+  }
+
   for (const dev of devices) {
     const li = document.createElement("li");
-    const srcTag = dev.sourceLabel || (dev.source === "app" || dev.source === "android" ? "Android" : "浏览器");
-    const srcColor = (dev.source === "app" || dev.source === "android") ? "#2f7bff" : "#FB7299";
+    const src = dev.source || "";
+    const srcTag = dev.sourceLabel || srcDisplayLabel(src);
+    // 从 hoursByDevice 颜色映射找，找不到就按设备序号分色
+    const colorEntry = colorMap[dev.deviceId]
+      || DEVICE_COLORS[i % DEVICE_COLORS.length];
+    const lineColor = colorEntry.line || colorEntry;
+    const fillHex = lineColor + "1a";
     li.innerHTML = `
-      <span class="device-dot" style="background:${srcColor}"></span>
-      <span class="device-name">${escapeHtml(dev.deviceAlias || dev.deviceId)} <span style="color:${srcColor};font-size:10px;padding:1px 6px;border-radius:6px;background:${srcColor}1a;margin-left:4px;">${escapeHtml(srcTag)}</span></span>
+      <span class="device-dot" style="background:${lineColor}"></span>
+      <span class="device-name">${escapeHtml(dev.deviceAlias || dev.deviceId)}
+        <span style="color:${lineColor};font-size:10px;padding:1px 6px;border-radius:6px;background:${fillHex};margin-left:4px;">${escapeHtml(srcTag)}</span>
+      </span>
       <span class="device-time">${formatDuration(dev.totalMs)}</span>
     `;
     deviceList.appendChild(li);

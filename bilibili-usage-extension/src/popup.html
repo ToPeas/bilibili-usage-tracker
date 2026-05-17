@@ -58,6 +58,10 @@
             <p class="card-sub" id="daySub">点击趋势图可查看各设备时长</p>
           </div>
         </div>
+        <div class="chart-wrap" id="hourChartWrap" style="display:none;position:relative">
+          <canvas id="hourChart" width="640" height="160"></canvas>
+          <div id="hourTooltip" style="display:none;position:absolute;pointer-events:none;background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:6px 10px;font-size:11px;color:#1f1f23;box-shadow:0 2px 8px rgba(0,0,0,0.12);min-width:110px;z-index:10"></div>
+        </div>
         <ul class="device-list" id="deviceList"></ul>
       </section>
 

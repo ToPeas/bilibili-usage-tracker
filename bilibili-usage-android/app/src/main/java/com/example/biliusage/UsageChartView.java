@@ -449,12 +449,24 @@ public final class UsageChartView extends View {
     public static final class DeviceUsage {
         public final String deviceId;
         public final String deviceAlias;
+        public final String source;
         public final long totalMs;
         public final String uploadedAt;
+        /** 颜色索引（0-4），对应 HourChartView.LINE_COLORS，-1 表示未分配 */
+        public int colorIndex = -1;
 
         public DeviceUsage(String deviceId, String deviceAlias, long totalMs, String uploadedAt) {
             this.deviceId = deviceId == null ? "" : deviceId;
             this.deviceAlias = deviceAlias == null ? "" : deviceAlias;
+            this.source = "";
+            this.totalMs = totalMs;
+            this.uploadedAt = uploadedAt == null ? "" : uploadedAt;
+        }
+
+        public DeviceUsage(String deviceId, String deviceAlias, String source, long totalMs, String uploadedAt) {
+            this.deviceId = deviceId == null ? "" : deviceId;
+            this.deviceAlias = deviceAlias == null ? "" : deviceAlias;
+            this.source = source == null ? "" : source;
             this.totalMs = totalMs;
             this.uploadedAt = uploadedAt == null ? "" : uploadedAt;
         }

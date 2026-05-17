@@ -69,6 +69,8 @@ public class MainActivity extends android.app.Activity {
 
     private int currentRangeDays = 7;
     private List<UsageChartView.DayBucket> currentDays = new ArrayList<>();
+    /** 用户当前选中的日期（yyyy-MM-dd），用于刷新后恢复选中，避免跳动 */
+    private String selectedDay = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -187,14 +189,14 @@ public class MainActivity extends android.app.Activity {
         card.addView(split, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
-        // 左列：本机今日
+        // 左列：全平台今日（D1 全设备合计，与 24h 图一致）
         LinearLayout leftCol = new LinearLayout(this);
         leftCol.setOrientation(LinearLayout.VERTICAL);
         LinearLayout.LayoutParams leftLp = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
         split.addView(leftCol, leftLp);
 
         TextView labelLeft = new TextView(this);
-        labelLeft.setText("本机 B 站 · 今日");
+        labelLeft.setText("全平台 B 站 · 今日");
         labelLeft.setTextColor(0xFFFFFFFF);
         labelLeft.setAlpha(0.92f);
         labelLeft.setTextSize(12f);
@@ -235,7 +237,7 @@ public class MainActivity extends android.app.Activity {
         split.addView(rightCol, rightLp);
 
         TextView labelRight = new TextView(this);
-        labelRight.setText("全设备总计 · 今日");
+        labelRight.setText("本机实时 · 今日");
         labelRight.setTextColor(0xFFFFFFFF);
         labelRight.setAlpha(0.92f);
         labelRight.setTextSize(12f);
@@ -354,6 +356,7 @@ public class MainActivity extends android.app.Activity {
         card.addView(chart, chartLp);
 
         chart.setOnDaySelectedListener((index, bucket) -> {
+            selectedDay = bucket.date; // 记住用户选中，刷新时不跳动
             refreshDeviceCard(bucket);
             loadHoursForSelected(bucket);
         });
@@ -620,23 +623,33 @@ public class MainActivity extends android.app.Activity {
         try {
             JSONObject payload = UsageCollector.collectDay(this, settings, Calendar.getInstance());
             localTotal = payload.getLong("totalMs");
-            heroTodayValue.setText(formatBig(localTotal));
+            // 副标题展示本机各 App 详情
             heroTodaySubtitle.setText(buildTodayBundleSummary(payload));
         } catch (Exception e) {
-            heroTodayValue.setText("--");
             heroTodaySubtitle.setText("读取系统使用情况失败：" + (e.getMessage() == null ? "" : e.getMessage()));
         }
+        // 左上角大数字先用本机值占位，等 D1 回来后 refreshAllDevicesTodayChip 会更新为全设备总计
+        heroTodayValue.setText(formatBig(localTotal));
 
         // 右侧「全设备今日总计」需要从 D1 拉取，后台线程执行
         refreshAllDevicesTodayChip(settings, localTotal);
     }
 
-    /** 从 D1 拉取今日所有设备总计（含本机、含 Chrome 插件上传），并与本机未上传部分取最大避免丢多。 */
+    /**
+     * 从 D1 拉取今日所有设备总计（含本机、含 Chrome 插件上传）。
+     * D1 拿到后：
+     *   - 左上角大字（heroTodayValue）= 全平台总计（与 24h 图一致）
+     *   - 右侧（heroAllDevicesValue）= 本机实时数据
+     */
     private void refreshAllDevicesTodayChip(SettingsStore settings, long localTotal) {
         if (heroAllDevicesValue == null) return;
+        // 右侧始终展示本机实时
+        heroAllDevicesValue.setText(formatBig(localTotal));
+        heroAllDevicesSubtitle.setText("本机实时");
+
         if (!settings.isCloudConfigured()) {
-            heroAllDevicesValue.setText(formatBig(localTotal));
-            heroAllDevicesSubtitle.setText("未配置 D1，仅含本机");
+            // 没有 D1，左上角也用本机
+            heroTodayValue.setText(formatBig(localTotal));
             return;
         }
         String today = formatDate(Calendar.getInstance());
@@ -659,29 +672,28 @@ public class MainActivity extends android.app.Activity {
                         deviceCount++;
                     }
                 }
-                // 本机部分取 D1(已上传) 与 本地 UsageStats 的较大者，避免未上传会造成少计
+                // 本机取 D1 与本地实时的较大者（未上传时用本地兑底）
                 long localShown = Math.max(selfRow, localTotal);
                 long grandTotal = sumOthers + localShown;
-                long fSumOthers = sumOthers;
-                long fSelfRow = selfRow;
                 int fDeviceCount = deviceCount;
                 long fGrand = grandTotal;
+                long fLocalShown = localShown;
+                long fSumOthers = sumOthers;
+                long fSelfRow = selfRow;
                 runOnUiThread(() -> {
-                    heroAllDevicesValue.setText(formatBig(fGrand));
+                    // 左上角 = 全平台总计（与 24h 图一致）
+                    heroTodayValue.setText(formatBig(fGrand));
+                    // 右侧 = 本机实时，注明贡献
                     StringBuilder sb = new StringBuilder();
-                    if (fDeviceCount > 0) sb.append(fDeviceCount).append(" 台设备");
+                    if (fDeviceCount > 0) sb.append(fDeviceCount).append(" 台");
                     else sb.append("仅本机");
-                    sb.append(" · 本机贡献 ").append(formatDuration(localShown));
-                    if (fSumOthers > 0L) sb.append(" + 其他 ").append(formatDuration(fSumOthers));
-                    if (localShown > fSelfRow) sb.append(" · 含未上传 ").append(formatDuration(localShown - fSelfRow));
+                    if (fSumOthers > 0L) sb.append(" · 其他 ").append(formatDuration(fSumOthers));
+                    if (fLocalShown > fSelfRow) sb.append(" · 含未上传");
                     heroAllDevicesSubtitle.setText(sb.toString());
                 });
             } catch (Exception e) {
                 final String msg = e.getMessage() == null ? "拉取失败" : e.getMessage();
-                runOnUiThread(() -> {
-                    heroAllDevicesValue.setText(formatBig(localTotal));
-                    heroAllDevicesSubtitle.setText("D1 读取失败：" + msg);
-                });
+                runOnUiThread(() -> heroAllDevicesSubtitle.setText("D1 读取失败：" + msg));
             }
         }).start();
     }
@@ -718,7 +730,7 @@ public class MainActivity extends android.app.Activity {
                 deviceBreakdown.setData("按设备拆分", Collections.emptyList());
                 selectedDayTitle.setText("请先配置 D1");
                 selectedDayMeta.setText("填写 Cloudflare 信息后才能展示历史数据");
-                if (hourChart != null) hourChart.setHours(new long[24]);
+                if (hourChart != null) hourChart.setDeviceHours(null, null);
                 if (hourCardSubtitle != null) hourCardSubtitle.setText("请先配置 D1");
             });
             return;
@@ -838,49 +850,87 @@ public class MainActivity extends android.app.Activity {
 
         runOnUiThread(() -> {
             chart.setDays(currentDays);
-            // 默认选中「今天」（最右），让用户一进来就看到今日详情。
-            int idx = currentDays.isEmpty() ? -1 : currentDays.size() - 1;
-            chart.setSelectedIndex(idx);
             updateRangeTabsUi();
-            if (idx >= 0) {
-                refreshDeviceCard(currentDays.get(idx));
-                loadHoursForSelected(currentDays.get(idx));
-            } else {
+            if (currentDays.isEmpty()) {
                 deviceBreakdown.setData("按设备拆分", Collections.emptyList());
                 selectedDayTitle.setText("暂无数据");
                 selectedDayMeta.setText(labelOfRange(currentRangeDays) + "没有上传记录");
-                if (hourChart != null) hourChart.setHours(new long[24]);
+                if (hourChart != null) hourChart.setDeviceHours(null, null);
                 if (hourCardSubtitle != null) hourCardSubtitle.setText("暂无时段数据");
+                return;
             }
+            // 保留用户已选择的日期；只有没有选择时才默认选今天（最右）
+            int idx = -1;
+            if (selectedDay != null) {
+                for (int i = 0; i < currentDays.size(); i++) {
+                    if (selectedDay.equals(currentDays.get(i).date)) { idx = i; break; }
+                }
+            }
+            if (idx < 0) idx = currentDays.size() - 1; // 没找到则选今天
+            chart.setSelectedIndex(idx);
+            selectedDay = currentDays.get(idx).date; // 记住选中
+            refreshDeviceCard(currentDays.get(idx));
+            loadHoursForSelected(currentDays.get(idx));
         });
     }
 
-    /** 拉某天的 24 小时分布，多设备累加；在后台线程调用。 */
+    /** 拉某天的 24 小时分布（全设备，按设备分色）；在后台线程调用。 */
     private void loadHoursForSelected(UsageChartView.DayBucket bucket) {
         if (bucket == null || hourChart == null) return;
         SettingsStore settings = SettingsStore.load(this);
         if (!settings.isCloudConfigured()) return;
         new Thread(() -> {
-            long[] result = new long[24];
+            // device_id -> [source(String), alias(String), hours(long[24])]
+            java.util.LinkedHashMap<String, Object[]> deviceMap = new java.util.LinkedHashMap<>();
             try {
                 JSONArray rows = new D1Client(settings).queryDayHours(bucket.date);
                 if (rows != null) {
                     for (int i = 0; i < rows.length(); i++) {
                         JSONObject row = rows.getJSONObject(i);
+                        String deviceId = row.optString("deviceId", "");
+                        String source   = row.optString("source", "");
+                        String alias    = row.optString("deviceAlias", "");
+                        if (alias.isEmpty()) alias = deviceId.length() >= 8 ? deviceId.substring(0, 8) : deviceId;
                         int hour = Math.max(0, Math.min(23, row.optInt("hour", 0)));
-                        result[hour] += row.optLong("durationMs", 0L);
+                        long ms  = row.optLong("durationMs", 0L);
+                        if (!deviceMap.containsKey(deviceId)) {
+                            deviceMap.put(deviceId, new Object[]{source, alias, new long[24]});
+                        }
+                        ((long[]) deviceMap.get(deviceId)[2])[hour] += ms;
                     }
                 }
-            } catch (Exception ignore) {
-                // 表不存在或查询失败时，展示空
+            } catch (Exception ignore) { }
+
+            // 按设备序号分配颜色（每台设备独立一色，不再区分 source）
+            java.util.Map<String, Integer> deviceColor = new java.util.LinkedHashMap<>();
+            int deviceSeq = 0;
+            for (String devId : deviceMap.keySet()) {
+                deviceColor.put(devId, deviceSeq % HourChartView.LINE_COLORS.length);
+                deviceSeq++;
             }
+
+            List<HourChartView.DeviceSeries> series = new ArrayList<>();
+            for (java.util.Map.Entry<String, Object[]> entry : deviceMap.entrySet()) {
+                Object[] val = entry.getValue();
+                int cIdx = deviceColor.getOrDefault(entry.getKey(), 0);
+                series.add(new HourChartView.DeviceSeries(
+                        (String) val[1], (String) val[0], (long[]) val[2], cIdx));
+            }
+
+            // 把颜色同步给 bucket.devices，让 DeviceBreakdownView 配色一致
+            for (UsageChartView.DeviceUsage du : bucket.devices) {
+                Integer c = deviceColor.get(du.deviceId);
+                if (c != null) du.colorIndex = c;
+            }
+
+            long displayTotal = bucket.totalMs > 0 ? bucket.totalMs : 0L;
             runOnUiThread(() -> {
-                hourChart.setHours(result);
-                long sum = 0L;
-                for (long v : result) sum += v;
+                hourChart.setDeviceHours(series, null);
+                // 刷新设备列表（colorIndex 已更新）
+                deviceBreakdown.setData(longLabel(bucket.date), bucket.devices);
                 if (hourCardSubtitle != null) {
-                    if (sum <= 0L) hourCardSubtitle.setText(longLabel(bucket.date) + " · 该日暂无时段数据");
-                    else hourCardSubtitle.setText(longLabel(bucket.date) + " · 合计 " + formatDuration(sum));
+                    if (displayTotal <= 0L) hourCardSubtitle.setText(longLabel(bucket.date) + " · 该日暂无时段数据");
+                    else hourCardSubtitle.setText(longLabel(bucket.date) + " · 合计 " + formatDuration(displayTotal));
                 }
             });
         }).start();
