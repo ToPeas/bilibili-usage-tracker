@@ -1,0 +1,74 @@
+{
+	"app":	{
+		"bundleName":	"com.example.biliusage",
+		"vendor":	"example",
+		"versionCode":	1,
+		"versionName":	"1.0.0",
+		"icon":	"$media:app_icon",
+		"label":	"$string:app_name",
+		"apiReleaseType":	"Release",
+		"compileSdkVersion":	"6.0.0.47",
+		"targetAPIVersion":	20,
+		"minAPIVersion":	20,
+		"compileSdkType":	"OpenHarmony",
+		"targetMinorAPIVersion":	0,
+		"targetPatchAPIVersion":	0,
+		"appEnvironments":	[],
+		"bundleType":	"app",
+		"buildMode":	"debug",
+		"debug":	true,
+		"iconId":	16777217,
+		"labelId":	16777216
+	},
+	"module":	{
+		"name":	"entry",
+		"type":	"entry",
+		"description":	"$string:module_desc",
+		"mainElement":	"EntryAbility",
+		"deviceTypes":	["default"],
+		"deliveryWithInstall":	true,
+		"installationFree":	false,
+		"pages":	"$profile:main_pages",
+		"abilities":	[{
+				"name":	"EntryAbility",
+				"srcEntry":	"./ets/entryability/EntryAbility.ets",
+				"description":	"$string:EntryAbility_desc",
+				"icon":	"$media:app_icon",
+				"label":	"$string:EntryAbility_label",
+				"startWindowIcon":	"$media:app_icon",
+				"startWindowBackground":	"$color:start_window_background",
+				"exported":	true,
+				"skills":	[{
+						"entities":	["entity.system.home"],
+						"actions":	["action.system.home"]
+					}],
+				"descriptionId":	16777218,
+				"iconId":	16777217,
+				"labelId":	16777219,
+				"startWindowIconId":	16777217,
+				"startWindowBackgroundId":	16777224
+			}],
+		"requestPermissions":	[{
+				"name":	"ohos.permission.BUNDLE_ACTIVE_INFO",
+				"reason":	"$string:perm_bundle_active_reason",
+				"usedScene":	{
+					"abilities":	["EntryAbility"],
+					"when":	"always"
+				},
+				"reasonId":	16777221
+			}, {
+				"name":	"ohos.permission.INTERNET",
+				"reason":	"$string:perm_internet_reason",
+				"reasonId":	16777222
+			}, {
+				"name":	"ohos.permission.GET_NETWORK_INFO",
+				"reason":	"$string:perm_network_reason",
+				"reasonId":	16777223
+			}],
+		"packageName":	"entry",
+		"virtualMachine":	"ark13.0.1.0",
+		"compileMode":	"esmodule",
+		"dependencies":	[],
+		"descriptionId":	16777220
+	}
+}

@@ -93,6 +93,56 @@ body { width: 380px; min-height: 480px; }
 .chart-wrap { width: 100%; }
 canvas { width: 100%; height: auto; display: block; }
 
+/* 24h 柱状图 */
+.hour-bars-wrap { padding: 0; }
+.hour-bars {
+  display: flex; align-items: flex-end; gap: 2px;
+  width: 100%;
+  padding: 0 0 20px 0;
+  position: relative; box-sizing: border-box;
+  /* 允许 tooltip 超出列但不超出整个图区（不加 overflow:hidden）*/
+}
+.hour-col {
+  flex: 1; display: flex; flex-direction: column; justify-content: flex-end;
+  position: relative; height: 100px; cursor: default;
+}
+.hour-col:hover .hour-col-inner { filter: brightness(1.1); }
+.hour-col-inner {
+  width: 100%; position: relative;
+  /* 不加 overflow:hidden，让 tooltip 能从父层弹出 */
+  transition: filter 0.1s;
+  display: flex; flex-direction: column; justify-content: flex-end;
+}
+.hour-seg { width: 100%; flex-shrink: 0; border-radius: 2px 2px 0 0; }
+.hour-label {
+  position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
+  font-size: 9px; color: #B6AFB9; white-space: nowrap; pointer-events: none;
+}
+/* Tooltip — 挂在 .hour-bars 上，JS 控制 left 定位 */
+.hour-tip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% - 94px); /* 从柱子顶部弹出 */
+  z-index: 100; pointer-events: none;
+  background: #fff; border: 1px solid #e8e0ec; border-radius: 8px;
+  padding: 7px 10px; min-width: 110px; max-width: 180px;
+  box-shadow: 0 3px 12px rgba(0,0,0,0.13);
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+.hour-tip-header { font-size: 11px; font-weight: 600; color: #1f1f23; margin-bottom: 5px; }
+.hour-tip-row { display: flex; align-items: center; gap: 5px; margin-top: 3px; }
+.hour-tip-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.hour-tip-name { font-size: 10px; color: #1f1f23; flex: 1; }
+.hour-tip-time { font-size: 10px; color: #6B6470; padding-left: 6px; }
+/* 图例行 */
+.hour-legend {
+  display: flex; flex-wrap: wrap; gap: 6px 12px;
+  padding: 4px 0 6px; font-size: 10px; color: #6B6470;
+}
+.hour-legend-item { display: flex; align-items: center; gap: 4px; }
+.hour-legend-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+
 .legend { display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; color: var(--ink-soft); }
 .legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
 

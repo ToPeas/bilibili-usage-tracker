@@ -2,6 +2,53 @@ import { http } from '@kit.NetworkKit';
 import { Settings } from '../common/SettingsStore';
 import { DayPayload } from './UsageCollector';
 
+type D1Param = string | number;
+
+class D1Statement {
+  sql: string = '';
+  params: D1Param[] = [];
+
+  constructor(sql: string, params: D1Param[] = []) {
+    this.sql = sql;
+    this.params = params;
+  }
+}
+
+class D1BatchRequest {
+  batch: D1Statement[] = [];
+
+  constructor(batch: D1Statement[]) {
+    this.batch = batch;
+  }
+}
+
+class D1QueryRequest {
+  sql: string = '';
+  params: D1Param[] = [];
+
+  constructor(sql: string, params: D1Param[]) {
+    this.sql = sql;
+    this.params = params;
+  }
+}
+
+class D1Row {
+  date: string = '';
+  source: string = '';
+  deviceAlias: string = '';
+  deviceId: string = '';
+  totalMs: number = 0;
+  uploadedAt: string = '';
+}
+
+class D1QueryResult {
+  results?: D1Row[];
+}
+
+class D1ResponseEnvelope {
+  result?: D1QueryResult[];
+}
+
 export class D1Result {
   ok: boolean = false;
   status: number = 0;
@@ -11,18 +58,22 @@ export class D1Result {
 
 export class D1Client {
   settings: Settings;
-  constructor(s: Settings) { this.settings = s; }
+
+  constructor(s: Settings) {
+    this.settings = s;
+  }
 
   private url(): string {
     return `https://api.cloudflare.com/client/v4/accounts/${this.settings.accountId}/d1/database/${this.settings.databaseId}/query`;
   }
 
-  private async send(body: object): Promise<D1Result> {
+  private async send(body: D1BatchRequest | D1QueryRequest): Promise<D1Result> {
     const r = new D1Result();
     if (!this.settings.accountId || !this.settings.databaseId || !this.settings.apiToken) {
       r.error = '请先填写 Account ID / Database ID / API Token';
       return r;
     }
+
     const req = http.createHttp();
     try {
       const resp = await req.request(this.url(), {
@@ -38,9 +89,12 @@ export class D1Client {
       r.status = resp.responseCode;
       r.body = String(resp.result || '');
       r.ok = r.status >= 200 && r.status < 300;
-      if (!r.ok) r.error = `HTTP ${r.status}: ${r.body.slice(0, 200)}`;
+      if (!r.ok) {
+        r.error = `HTTP ${r.status}: ${r.body.slice(0, 200)}`;
+      }
     } catch (e) {
-      r.error = String((e as Error).message || e);
+      const err = e as Error;
+      r.error = err.message || String(e);
     } finally {
       req.destroy();
     }
@@ -48,58 +102,69 @@ export class D1Client {
   }
 
   async ensureSchema(): Promise<D1Result> {
-    const stmts: object[] = [
-      { sql: "CREATE TABLE IF NOT EXISTS usage_daily (date TEXT NOT NULL, source TEXT NOT NULL, device_id TEXT NOT NULL, device_alias TEXT NOT NULL DEFAULT '', timezone TEXT NOT NULL, total_ms INTEGER NOT NULL, reported_at TEXT NOT NULL, app_version TEXT NOT NULL, schema_version INTEGER NOT NULL, uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (date, source, device_id))" },
-      { sql: "CREATE TABLE IF NOT EXISTS usage_items (date TEXT NOT NULL, source TEXT NOT NULL, device_id TEXT NOT NULL, bundle TEXT NOT NULL, duration_ms INTEGER NOT NULL, PRIMARY KEY (date, source, device_id, bundle))" },
-      { sql: "CREATE TABLE IF NOT EXISTS usage_hours (date TEXT NOT NULL, source TEXT NOT NULL, device_id TEXT NOT NULL, hour INTEGER NOT NULL, duration_ms INTEGER NOT NULL, PRIMARY KEY (date, source, device_id, hour))" }
+    const stmts: D1Statement[] = [
+      new D1Statement("CREATE TABLE IF NOT EXISTS usage_daily (date TEXT NOT NULL, source TEXT NOT NULL, device_id TEXT NOT NULL, device_alias TEXT NOT NULL DEFAULT '', timezone TEXT NOT NULL, total_ms INTEGER NOT NULL, reported_at TEXT NOT NULL, app_version TEXT NOT NULL, schema_version INTEGER NOT NULL, uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (date, source, device_id))"),
+      new D1Statement("CREATE TABLE IF NOT EXISTS usage_items (date TEXT NOT NULL, source TEXT NOT NULL, device_id TEXT NOT NULL, bundle TEXT NOT NULL, duration_ms INTEGER NOT NULL, PRIMARY KEY (date, source, device_id, bundle))"),
+      new D1Statement("CREATE TABLE IF NOT EXISTS usage_hours (date TEXT NOT NULL, source TEXT NOT NULL, device_id TEXT NOT NULL, hour INTEGER NOT NULL, duration_ms INTEGER NOT NULL, PRIMARY KEY (date, source, device_id, hour))")
     ];
-    return await this.send({ batch: stmts });
+    return await this.send(new D1BatchRequest(stmts));
   }
 
   async uploadDay(day: DayPayload): Promise<D1Result> {
     const tz = 'Asia/Shanghai';
     const reportedAt = new Date().toISOString();
     const source = 'harmony';
+    const batch: D1Statement[] = [];
 
-    const batch: object[] = [];
-    batch.push({
-      sql: `INSERT INTO usage_daily (date, source, device_id, device_alias, timezone, total_ms, reported_at, app_version, schema_version, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(date, source, device_id) DO UPDATE SET device_alias = excluded.device_alias, timezone = excluded.timezone, total_ms = excluded.total_ms, reported_at = excluded.reported_at, app_version = excluded.app_version, schema_version = excluded.schema_version, uploaded_at = CURRENT_TIMESTAMP`,
-      params: [day.date, source, this.settings.deviceId, this.settings.deviceAlias, tz, day.totalMs, reportedAt, this.settings.appVersion, 2]
-    });
-    batch.push({
-      sql: `DELETE FROM usage_items WHERE date = ? AND source = ? AND device_id = ?`,
-      params: [day.date, source, this.settings.deviceId]
-    });
-    batch.push({
-      sql: `DELETE FROM usage_hours WHERE date = ? AND source = ? AND device_id = ?`,
-      params: [day.date, source, this.settings.deviceId]
-    });
+    batch.push(new D1Statement(
+      `INSERT INTO usage_daily (date, source, device_id, device_alias, timezone, total_ms, reported_at, app_version, schema_version, uploaded_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(date, source, device_id) DO UPDATE SET device_alias = excluded.device_alias, timezone = excluded.timezone, total_ms = excluded.total_ms, reported_at = excluded.reported_at, app_version = excluded.app_version, schema_version = excluded.schema_version, uploaded_at = CURRENT_TIMESTAMP`,
+      [day.date, source, this.settings.deviceId, this.settings.deviceAlias, tz, day.totalMs, reportedAt, this.settings.appVersion, 2]
+    ));
+    batch.push(new D1Statement(
+      `DELETE FROM usage_items WHERE date = ? AND source = ? AND device_id = ?`,
+      [day.date, source, this.settings.deviceId]
+    ));
+    batch.push(new D1Statement(
+      `DELETE FROM usage_hours WHERE date = ? AND source = ? AND device_id = ?`,
+      [day.date, source, this.settings.deviceId]
+    ));
+
     for (const item of day.byBundle) {
-      if (item.durationMs <= 0) continue;
-      batch.push({
-        sql: `INSERT INTO usage_items (date, source, device_id, bundle, duration_ms) VALUES (?, ?, ?, ?, ?)`,
-        params: [day.date, source, this.settings.deviceId, item.bundle, item.durationMs]
-      });
+      if (item.durationMs <= 0) {
+        continue;
+      }
+      batch.push(new D1Statement(
+        `INSERT INTO usage_items (date, source, device_id, bundle, duration_ms) VALUES (?, ?, ?, ?, ?)`,
+        [day.date, source, this.settings.deviceId, item.bundle, item.durationMs]
+      ));
     }
+
     for (let h = 0; h < 24; h++) {
-      if ((day.byHour[h] || 0) <= 0) continue;
-      batch.push({
-        sql: `INSERT INTO usage_hours (date, source, device_id, hour, duration_ms) VALUES (?, ?, ?, ?, ?)`,
-        params: [day.date, source, this.settings.deviceId, h, day.byHour[h]]
-      });
+      const durationMs = day.byHour[h] || 0;
+      if (durationMs <= 0) {
+        continue;
+      }
+      batch.push(new D1Statement(
+        `INSERT INTO usage_hours (date, source, device_id, hour, duration_ms) VALUES (?, ?, ?, ?, ?)`,
+        [day.date, source, this.settings.deviceId, h, durationMs]
+      ));
     }
-    return await this.send({ batch });
+
+    return await this.send(new D1BatchRequest(batch));
   }
 
   async queryRecent(days: number): Promise<DayRow[]> {
     const today = new Date();
     const from = new Date(today.getTime() - (days - 1) * 24 * 3600 * 1000);
-    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const r = await this.send({
-      sql: "SELECT date, source, COALESCE(device_alias, device_id) AS deviceAlias, device_id AS deviceId, total_ms AS totalMs, uploaded_at AS uploadedAt FROM usage_daily WHERE date >= ? AND date <= ? ORDER BY date DESC, total_ms DESC",
-      params: [fmt(from), fmt(today)]
-    });
-    if (!r.ok) return [];
+    const request = new D1QueryRequest(
+      "SELECT date, source, COALESCE(device_alias, device_id) AS deviceAlias, device_id AS deviceId, total_ms AS totalMs, uploaded_at AS uploadedAt FROM usage_daily WHERE date >= ? AND date <= ? ORDER BY date DESC, total_ms DESC",
+      [D1Client.fmtDate(from), D1Client.fmtDate(today)]
+    );
+    const r = await this.send(request);
+    if (!r.ok) {
+      return [];
+    }
+
     try {
       const j = JSON.parse(r.body) as D1ResponseEnvelope;
       const rows: DayRow[] = [];
@@ -107,14 +172,14 @@ export class D1Client {
         const resultsField = j.result[0].results;
         if (resultsField) {
           for (const row of resultsField) {
-            rows.push({
-              date: String(row.date || ''),
-              source: String(row.source || ''),
-              deviceAlias: String(row.deviceAlias || row.deviceId || ''),
-              deviceId: String(row.deviceId || ''),
-              totalMs: Number(row.totalMs || 0),
-              uploadedAt: String(row.uploadedAt || '')
-            });
+            const dayRow = new DayRow();
+            dayRow.date = String(row.date || '');
+            dayRow.source = String(row.source || '');
+            dayRow.deviceAlias = String(row.deviceAlias || row.deviceId || '');
+            dayRow.deviceId = String(row.deviceId || '');
+            dayRow.totalMs = Number(row.totalMs || 0);
+            dayRow.uploadedAt = String(row.uploadedAt || '');
+            rows.push(dayRow);
           }
         }
       }
@@ -123,10 +188,13 @@ export class D1Client {
       return [];
     }
   }
-}
 
-interface D1ResponseEnvelope {
-  result?: { results?: Record<string, ESObject>[] }[];
+  private static fmtDate(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  }
 }
 
 export class DayRow {

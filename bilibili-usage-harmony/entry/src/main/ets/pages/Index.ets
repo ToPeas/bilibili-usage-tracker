@@ -66,6 +66,7 @@ struct Index {
   @State refreshing: boolean = false;
   @State message: string = '';
   @State permGranted: boolean = false;
+  @State usageSupported: boolean = false;
 
   async aboutToAppear(): Promise<void> {
     await this.refresh();
@@ -77,12 +78,19 @@ struct Index {
     this.message = '';
     try {
       const ctx = getContext(this) as common.UIAbilityContext;
-      const ok = await this.ensurePermission(ctx);
-      this.permGranted = ok;
-      if (!ok) {
-        this.message = '请在系统设置中授予「应用使用记录」权限后再回来';
-        return;
+      this.usageSupported = UsageCollector.canReadDetailedAppUsage();
+      if (this.usageSupported) {
+        const ok = await this.ensurePermission(ctx);
+        this.permGranted = ok;
+        if (!ok) {
+          this.message = '请在系统设置中授予「应用使用记录」权限后再回来';
+          return;
+        }
+      } else {
+        this.permGranted = false;
+        this.message = UsageCollector.unsupportedReason();
       }
+
       this.recentDays = await UsageCollector.collectRecent(7);
       const todayKey = UsageCollector.fmtDate(new Date());
       const today = this.recentDays.find(d => d.date === todayKey);
@@ -91,12 +99,14 @@ struct Index {
       this.selectedDate = todayKey;
 
       const s = await SettingsStore.get(ctx);
-      if (s.accountId && s.databaseId && s.apiToken && today) {
+      if (s.accountId && s.databaseId && s.apiToken) {
         const client = new D1Client(s);
         const schemaResp = await client.ensureSchema();
         if (schemaResp.ok) {
-          const up = await client.uploadDay(today);
-          if (!up.ok) this.message = '上传失败：' + up.error;
+          if (this.usageSupported && today && today.totalMs > 0) {
+            const up = await client.uploadDay(today);
+            if (!up.ok) this.message = '上传失败：' + up.error;
+          }
         } else {
           this.message = '建表失败：' + schemaResp.error;
         }
@@ -160,8 +170,8 @@ struct Index {
           .width('100%')
 
           Row() {
-            this.chip(this.permGranted ? '权限已授予' : '权限未授予',
-              this.permGranted ? '#34C759' : '#FF3B30')
+            this.chip(this.usageSupported ? (this.permGranted ? '权限已授予' : '权限未授予') : '系统不开放统计',
+              this.usageSupported ? (this.permGranted ? '#34C759' : '#FF3B30') : '#FF9500')
             this.chip(this.todayAll === '未配置 D1' ? 'D1 未配置' : 'D1 已连接',
               this.todayAll === '未配置 D1' ? '#FF9500' : '#34C759')
           }.margin({ top: 12 })
@@ -267,6 +277,9 @@ struct Index {
   }
 
   selectedDateSub(): string {
+    if (!this.usageSupported) {
+      return '本机：当前 SDK 不支持读取其它 App 使用时长';
+    }
     const arr = this.selectedHourArr();
     let sum = 0; for (const v of arr) sum += v;
     return '本机：' + fmtDur(sum) + ' ｜ 24 小时分布';

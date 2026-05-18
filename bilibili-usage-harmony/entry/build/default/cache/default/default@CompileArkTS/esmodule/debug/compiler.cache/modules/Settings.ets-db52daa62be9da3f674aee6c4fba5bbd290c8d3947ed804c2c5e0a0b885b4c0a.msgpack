@@ -1,0 +1,521 @@
+Ôr@Ÿªassertions¤code´customTransformCache¬dependencies¢id¤meta±moduleSideEffects¬originalCode±originalSourcemap«resolvedIds®sourcemapChainµsyntheticNamedExportsµtransformDependencies®transformFiles¨cacheAstÔrAÚ/lif (!("finalizeConstruction" in ViewPU.prototype)) {
+    Reflect.set(ViewPU.prototype, "finalizeConstruction", () => { });
+}
+import { router, promptAction } from '@kit.ArkUI';
+import { SettingsStore, Settings } from '../common/SettingsStore';
+import { D1Client } from '../services/D1Client';
+const PINK = '#FB7299';
+const INK = '#222';
+const INK_SOFT = '#6B6470';
+class SettingsPage extends ViewPU {
+    constructor(parent, params, __localStorage, elmtId = -1, paramsLambda = undefined, extraInfo) {
+        super(parent, __localStorage, elmtId, extraInfo);
+        if (typeof paramsLambda === "function") {
+            this.paramsGenerator_ = paramsLambda;
+        }
+        this.__accountId = new ObservedPropertySimplePU('', this, "accountId");
+        this.__databaseId = new ObservedPropertySimplePU('', this, "databaseId");
+        this.__apiToken = new ObservedPropertySimplePU('', this, "apiToken");
+        this.__deviceAlias = new ObservedPropertySimplePU('é¸¿è’™è®¾å¤‡', this, "deviceAlias");
+        this.__deviceId = new ObservedPropertySimplePU('', this, "deviceId");
+        this.__testing = new ObservedPropertySimplePU(false, this, "testing");
+        this.__testResult = new ObservedPropertySimplePU('', this, "testResult");
+        this.setInitiallyProvidedValue(params);
+        this.finalizeConstruction();
+    }
+    setInitiallyProvidedValue(params) {
+        if (params.accountId !== undefined) {
+            this.accountId = params.accountId;
+        }
+        if (params.databaseId !== undefined) {
+            this.databaseId = params.databaseId;
+        }
+        if (params.apiToken !== undefined) {
+            this.apiToken = params.apiToken;
+        }
+        if (params.deviceAlias !== undefined) {
+            this.deviceAlias = params.deviceAlias;
+        }
+        if (params.deviceId !== undefined) {
+            this.deviceId = params.deviceId;
+        }
+        if (params.testing !== undefined) {
+            this.testing = params.testing;
+        }
+        if (params.testResult !== undefined) {
+            this.testResult = params.testResult;
+        }
+    }
+    updateStateVars(params) {
+    }
+    purgeVariableDependenciesOnElmtId(rmElmtId) {
+        this.__accountId.purgeDependencyOnElmtId(rmElmtId);
+        this.__databaseId.purgeDependencyOnElmtId(rmElmtId);
+        this.__apiToken.purgeDependencyOnElmtId(rmElmtId);
+        this.__deviceAlias.purgeDependencyOnElmtId(rmElmtId);
+        this.__deviceId.purgeDependencyOnElmtId(rmElmtId);
+        this.__testing.purgeDependencyOnElmtId(rmElmtId);
+        this.__testResult.purgeDependencyOnElmtId(rmElmtId);
+    }
+    aboutToBeDeleted() {
+        this.__accountId.aboutToBeDeleted();
+        this.__databaseId.aboutToBeDeleted();
+        this.__apiToken.aboutToBeDeleted();
+        this.__deviceAlias.aboutToBeDeleted();
+        this.__deviceId.aboutToBeDeleted();
+        this.__testing.aboutToBeDeleted();
+        this.__testResult.aboutToBeDeleted();
+        SubscriberManager.Get().delete(this.id__());
+        this.aboutToBeDeletedInternal();
+    }
+    get accountId() {
+        return this.__accountId.get();
+    }
+    set accountId(newValue) {
+        this.__accountId.set(newValue);
+    }
+    get databaseId() {
+        return this.__databaseId.get();
+    }
+    set databaseId(newValue) {
+        this.__databaseId.set(newValue);
+    }
+    get apiToken() {
+        return this.__apiToken.get();
+    }
+    set apiToken(newValue) {
+        this.__apiToken.set(newValue);
+    }
+    get deviceAlias() {
+        return this.__deviceAlias.get();
+    }
+    set deviceAlias(newValue) {
+        this.__deviceAlias.set(newValue);
+    }
+    get deviceId() {
+        return this.__deviceId.get();
+    }
+    set deviceId(newValue) {
+        this.__deviceId.set(newValue);
+    }
+    get testing() {
+        return this.__testing.get();
+    }
+    set testing(newValue) {
+        this.__testing.set(newValue);
+    }
+    get testResult() {
+        return this.__testResult.get();
+    }
+    set testResult(newValue) {
+        this.__testResult.set(newValue);
+    }
+    async aboutToAppear() {
+        const ctx = getContext(this);
+        const s = await SettingsStore.get(ctx);
+        this.accountId = s.accountId;
+        this.databaseId = s.databaseId;
+        this.apiToken = s.apiToken;
+        this.deviceAlias = s.deviceAlias;
+        this.deviceId = s.deviceId;
+    }
+    initialRender() {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Scroll.create();
+            Scroll.width('100%');
+            Scroll.height('100%');
+            Scroll.backgroundColor('#FFFFFF');
+        }, Scroll);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Row.create();
+            Row.width('100%');
+            Row.padding(12);
+            Row.backgroundColor(PINK);
+        }, Row);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('â€¹');
+            Text.fontSize(28);
+            Text.fontColor('#FFFFFF');
+            Text.padding(4);
+            Text.onClick(() => router.back());
+        }, Text);
+        Text.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('è®¾ç½®');
+            Text.fontSize(16);
+            Text.fontWeight(700);
+            Text.fontColor('#FFFFFF');
+            Text.margin({ left: 8 });
+            Text.layoutWeight(1);
+        }, Text);
+        Text.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Button.createWithLabel('ä¿å­˜');
+            Button.fontSize(12);
+            Button.height(28);
+            Button.type(ButtonType.Capsule);
+            Button.backgroundColor('#FFFFFF');
+            Button.fontColor(PINK);
+            Button.onClick(() => this.save());
+        }, Button);
+        Button.pop();
+        Row.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.padding(16);
+            Column.alignItems(HorizontalAlign.Start);
+            Column.width('100%');
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('Cloudflare D1');
+            Text.fontSize(13);
+            Text.fontWeight(700);
+            Text.fontColor(INK);
+            Text.margin({ bottom: 8 });
+        }, Text);
+        Text.pop();
+        this.field.bind(this)('Account ID', this.accountId, v => { this.accountId = v; });
+        this.field.bind(this)('Database ID', this.databaseId, v => { this.databaseId = v; });
+        this.field.bind(this)('API Token', this.apiToken, v => { this.apiToken = v; }, true);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Divider.create();
+            Divider.margin({ top: 16, bottom: 16 });
+        }, Divider);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('æœ¬æœºæ ‡è¯†');
+            Text.fontSize(13);
+            Text.fontWeight(700);
+            Text.fontColor(INK);
+            Text.margin({ bottom: 8 });
+        }, Text);
+        Text.pop();
+        this.field.bind(this)('è®¾å¤‡åˆ«å', this.deviceAlias, v => { this.deviceAlias = v; });
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('Device ID: ' + this.deviceId);
+            Text.fontSize(11);
+            Text.fontColor(INK_SOFT);
+            Text.margin({ top: 4 });
+        }, Text);
+        Text.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Divider.create();
+            Divider.margin({ top: 16, bottom: 16 });
+        }, Divider);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Row.create();
+        }, Row);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Button.createWithLabel(this.testing ? 'æµ‹è¯•ä¸­â€¦' : 'æµ‹è¯•è¿æ¥');
+            Button.fontSize(12);
+            Button.height(32);
+            Button.type(ButtonType.Capsule);
+            Button.backgroundColor(this.testing ? '#CCC' : PINK);
+            Button.fontColor('#FFFFFF');
+            Button.layoutWeight(1);
+            Button.onClick(() => this.test());
+        }, Button);
+        Button.pop();
+        Row.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            If.create();
+            if (this.testResult) {
+                this.ifElseBranchUpdateFunction(0, () => {
+                    this.observeComponentCreation2((elmtId, isInitialRender) => {
+                        Text.create(this.testResult);
+                        Text.fontSize(11);
+                        Text.fontColor(INK_SOFT);
+                        Text.margin({ top: 8 });
+                    }, Text);
+                    Text.pop();
+                });
+            }
+            else {
+                this.ifElseBranchUpdateFunction(1, () => {
+                });
+            }
+        }, If);
+        If.pop();
+        Column.pop();
+        Column.pop();
+        Scroll.pop();
+    }
+    field(label, value, onChange, password = false, parent = null) {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.alignItems(HorizontalAlign.Start);
+            Column.width('100%');
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create(label);
+            Text.fontSize(11);
+            Text.fontColor(INK_SOFT);
+        }, Text);
+        Text.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            TextInput.create({ text: value, placeholder: 'è¯·è¾“å…¥ ' + label });
+            TextInput.type(password ? InputType.Password : InputType.Normal);
+            TextInput.fontSize(13);
+            TextInput.height(40);
+            TextInput.backgroundColor('#F7F7F7');
+            TextInput.borderRadius(8);
+            TextInput.padding({ left: 10, right: 10 });
+            TextInput.margin({ top: 4, bottom: 12 });
+            TextInput.onChange((v) => onChange(v));
+        }, TextInput);
+        Column.pop();
+    }
+    async save() {
+        const ctx = getContext(this);
+        const s = new Settings();
+        s.accountId = this.accountId.trim();
+        s.databaseId = this.databaseId.trim();
+        s.apiToken = this.apiToken.trim();
+        s.deviceAlias = this.deviceAlias.trim() || 'é¸¿è’™è®¾å¤‡';
+        s.deviceId = this.deviceId || ('harmony-' + Math.random().toString(36).slice(2, 10));
+        await SettingsStore.save(ctx, s);
+        promptAction.showToast({ message: 'å·²ä¿å­˜', duration: 1500 });
+    }
+    async test() {
+        if (this.testing)
+            return;
+        this.testing = true;
+        this.testResult = '';
+        try {
+            const ctx = getContext(this);
+            await this.save();
+            const s = await SettingsStore.get(ctx);
+            const client = new D1Client(s);
+            const r = await client.ensureSchema();
+            this.testResult = r.ok ? 'âœ… è¿æ¥æˆåŠŸï¼Œè¡¨ç»“æ„å·²å°±ç»ª' : 'âŒ ' + r.error;
+        }
+        catch (e) {
+            this.testResult = 'âŒ ' + String(e.message || e);
+        }
+        finally {
+            this.testing = false;
+        }
+    }
+    rerender() {
+        this.updateDirtyElements();
+    }
+    static getEntryName() {
+        return "SettingsPage";
+    }
+}
+registerNamedRoute(() => new SettingsPage(undefined, {}), "", { bundleName: "com.example.biliusage", moduleName: "entry", pagePath: "pages/Settings", pageFullPath: "entry/src/main/ets/pages/Settings", integratedHsp: "false", moduleType: "followWithHap" });
+//# sourceMappingURL=Settings.js.mapÂ“ÙR hvigor_ignore__Users_peiqixin_Library_OpenHarmony_Sdk_20_ets_kits_@kit.ArkUI.d.tsÙ^/Users/peiqixin/work/b-zhan/bilibili-usage-harmony/entry/src/main/ets/common/SettingsStore.etsÙ[/Users/peiqixin/work/b-zhan/bilibili-usage-harmony/entry/src/main/ets/services/D1Client.etsÙX/Users/peiqixin/work/b-zhan/bilibili-usage-harmony/entry/src/main/ets/pages/Settings.etsÔrB›ªmoduleName±isLocalDependency¯isNodeEntryFile§pkgPath±belongProjectPath§pkgNameªpkgVersion±dependencyPkgInfo°belongModulePath§checker¬shouldEmitJs¥entryÃÂÙ8/Users/peiqixin/work/b-zhan/bilibili-usage-harmony/entryÙ2/Users/peiqixin/work/b-zhan/bilibili-usage-harmony¥entry¥1.0.0Ô  Ù8/Users/peiqixin/work/b-zhan/bilibili-usage-harmony/entryÔrCÜ ®¬getNodeCount²getIdentifierCount®getSymbolCount¬getTypeCountµgetInstantiationCountµgetRelationCacheSizes±isUndefinedSymbol±isArgumentsSymbol¯isUnknownSymbol¯getMergedSymbol®getDiagnostics´getGlobalDiagnostics´getRecursionIdentity¶getUnmatchedProperties¹getTypeOfSymbolAtLocation¯getTypeOfSymbolÙ(getSymbolsOfParameterPropertyDeclaration·getDeclaredTypeOfSymbol³getPropertiesOfType±getPropertyOfTypeÙ"getPrivateIdentifierPropertyOfType·getTypeOfPropertyOfType²getIndexInfoOfType³getIndexInfosOfTypeºgetIndexInfosOfIndexSymbol³getSignaturesOfType²getIndexTypeOfType¬getIndexType¬getBaseTypes¸getBaseTypeOfLiteralType®getWidenedType³getTypeFromTypeNode°getParameterTypeÙ$getParameterIdentifierNameAtPosition¸getPromisedTypeOfPromise®getAwaitedType¸getReturnTypeOfSignature®isNullableType¯getNullableType²getNonNullableType²getNonOptionalType°getTypeArguments®typeToTypeNodeÙ$indexInfoToIndexSignatureDeclaration¿signatureToSignatureDeclaration²symbolToEntityName²symbolToExpression¬symbolToNodeÙ!symbolToTypeParameterDeclarations¼symbolToParameterDeclarationºtypeParameterToDeclaration±getSymbolsInScope³getSymbolAtLocation·getIndexInfosAtLocationÙ!getShorthandAssignmentValueSymbolÙ#getExportSpecifierLocalTargetSymbol·getExportSymbolOfSymbol±getTypeAtLocationÙ tryGetTypeAtLocationWithoutCheckºgetTypeOfAssignmentPatternÙ*getPropertySymbolOfDestructuringAssignment±signatureToString¬typeToString®symbolToStringµtypePredicateToString®writeSignature©writeType«writeSymbol²writeTypePredicate¼getAugmentedPropertiesOfType®getRootSymbols²getSymbolOfExpando±getContextualTypeÙ(getContextualTypeForObjectLiteralElementÙ#getContextualTypeForArgumentAtIndexÙ getContextualTypeForJsxAttribute²isContextSensitiveÙ!getTypeOfPropertyOfContextualTypeµgetFullyQualifiedNameÙ#tryGetResolvedSignatureWithoutCheck´getResolvedSignatureÙ/getResolvedSignatureForStringLiteralCompletionsÙ$getResolvedSignatureForSignatureHelpµgetExpandedParameters¹hasEffectiveRestParameterºcontainsArgumentsReference°getConstantValueµisValidPropertyAccessÙ#isValidPropertyAccessForCompletions»getSignatureFromDeclarationºisImplementationOfOverload¹getImmediateAliasedSymbol°getAliasedSymbol¯getEmitResolver²getExportsOfModule¿getExportsAndPropertiesOfModuleÙ forEachExportAndPropertyOfModule¯getSymbolWalker±getAmbientModules¹getJsxIntrinsicTagNamesAt³isOptionalParameter»tryGetMemberInModuleExportsÙ(tryGetMemberInModuleExportsAndProperties´tryFindAmbientModuleÙ(tryFindAmbientModuleWithoutAugmentations¯getApparentType¬getUnionType²isTypeAssignableTo³createAnonymousType¯createSignature¬createSymbol¯createIndexInfoªgetAnyType­getStringType­getNumberType±createPromiseType¯createArrayType¹getElementTypeOfArrayType®getBooleanType¬getFalseType«getTrueType«getVoidType°getUndefinedType«getNullType¯getESSymbolType¬getNeverType¯getOptionalType®getPromiseType²getPromiseLikeType´getAsyncIterableType²isSymbolAccessible«isArrayType«isTupleType¯isArrayLikeTypeÙ#isTypeInvalidDueToUnionDiscriminantºgetExactOptionalProperties¿getAllPossiblePropertiesOfTypesÙ(getSuggestedSymbolForNonexistentPropertyÙ#getSuggestionForNonexistentPropertyÙ,getSuggestedSymbolForNonexistentJSXAttributeÙ&getSuggestedSymbolForNonexistentSymbolÙ!getSuggestionForNonexistentSymbolÙ&getSuggestedSymbolForNonexistentModuleÙ!getSuggestionForNonexistentExportÙ+getSuggestedSymbolForNonexistentClassMember·getBaseConstraintOfType»getDefaultFromTypeParameter«resolveName¯getJsxNamespaceµgetJsxFragmentFactory¸getAccessibleSymbolChain»getTypePredicateOfSignature¹resolveExternalModuleName»resolveExternalModuleSymbol°tryGetThisTypeAt¹getTypeArgumentConstraint¸getSuggestionDiagnostics¸runWithCancellationTokenÙ3getLocalTypeParametersOfClassOrInterfaceOrTypeAlias´isDeclarationVisible´isPropertyAccessible»getTypeOnlyAliasDeclaration¿getMemberOverrideModifierStatusÙ!isTypeParameterPossiblyReferenced²getConstEnumRelate´clearConstEnumRelateµdeleteConstEnumRelateÙ$getTypeArgumentsForResolvedSignatureµgetCheckedSourceFilesÙ"collectHaveTsNoCheckFilesForLinter·clearQualifiedNameCache®isStaticRecord²isStaticSourceFile³createIntrinsicTypeÔ  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  ÃÃÚ®import { router, promptAction } from '@kit.ArkUI';
+import { common } from '@kit.AbilityKit';
+import { SettingsStore, Settings } from '../common/SettingsStore';
+import { D1Client } from '../services/D1Client';
+
+const PINK = '#FB7299';
+const INK = '#222';
+const INK_SOFT = '#6B6470';
+
+@Entry
+@Component
+struct SettingsPage {
+  @State accountId: string = '';
+  @State databaseId: string = '';
+  @State apiToken: string = '';
+  @State deviceAlias: string = 'é¸¿è’™è®¾å¤‡';
+  @State deviceId: string = '';
+  @State testing: boolean = false;
+  @State testResult: string = '';
+
+  async aboutToAppear(): Promise<void> {
+    const ctx = getContext(this) as common.UIAbilityContext;
+    const s = await SettingsStore.get(ctx);
+    this.accountId = s.accountId;
+    this.databaseId = s.databaseId;
+    this.apiToken = s.apiToken;
+    this.deviceAlias = s.deviceAlias;
+    this.deviceId = s.deviceId;
+  }
+
+  build() {
+    Scroll() {
+      Column() {
+        Row() {
+          Text('â€¹').fontSize(28).fontColor('#FFFFFF').padding(4)
+            .onClick(() => router.back())
+          Text('è®¾ç½®').fontSize(16).fontWeight(700).fontColor('#FFFFFF')
+            .margin({ left: 8 }).layoutWeight(1)
+          Button('ä¿å­˜')
+            .fontSize(12).height(28).type(ButtonType.Capsule)
+            .backgroundColor('#FFFFFF').fontColor(PINK)
+            .onClick(() => this.save())
+        }
+        .width('100%').padding(12).backgroundColor(PINK)
+
+        Column() {
+          Text('Cloudflare D1').fontSize(13).fontWeight(700).fontColor(INK).margin({ bottom: 8 })
+
+          this.field('Account ID', this.accountId, v => { this.accountId = v; })
+          this.field('Database ID', this.databaseId, v => { this.databaseId = v; })
+          this.field('API Token', this.apiToken, v => { this.apiToken = v; }, true)
+
+          Divider().margin({ top: 16, bottom: 16 })
+
+          Text('æœ¬æœºæ ‡è¯†').fontSize(13).fontWeight(700).fontColor(INK).margin({ bottom: 8 })
+          this.field('è®¾å¤‡åˆ«å', this.deviceAlias, v => { this.deviceAlias = v; })
+          Text('Device ID: ' + this.deviceId).fontSize(11).fontColor(INK_SOFT).margin({ top: 4 })
+
+          Divider().margin({ top: 16, bottom: 16 })
+
+          Row() {
+            Button(this.testing ? 'æµ‹è¯•ä¸­â€¦' : 'æµ‹è¯•è¿æ¥')
+              .fontSize(12).height(32).type(ButtonType.Capsule)
+              .backgroundColor(this.testing ? '#CCC' : PINK)
+              .fontColor('#FFFFFF')
+              .layoutWeight(1)
+              .onClick(() => this.test())
+          }
+          if (this.testResult) {
+            Text(this.testResult).fontSize(11).fontColor(INK_SOFT).margin({ top: 8 })
+          }
+        }
+        .padding(16)
+        .alignItems(HorizontalAlign.Start)
+        .width('100%')
+      }
+    }
+    .width('100%').height('100%').backgroundColor('#FFFFFF')
+  }
+
+  @Builder field(label: string, value: string, onChange: (v: string) => void, password: boolean = false) {
+    Column() {
+      Text(label).fontSize(11).fontColor(INK_SOFT)
+      TextInput({ text: value, placeholder: 'è¯·è¾“å…¥ ' + label })
+        .type(password ? InputType.Password : InputType.Normal)
+        .fontSize(13)
+        .height(40)
+        .backgroundColor('#F7F7F7')
+        .borderRadius(8)
+        .padding({ left: 10, right: 10 })
+        .margin({ top: 4, bottom: 12 })
+        .onChange((v: string) => onChange(v))
+    }
+    .alignItems(HorizontalAlign.Start)
+    .width('100%')
+  }
+
+  async save(): Promise<void> {
+    const ctx = getContext(this) as common.UIAbilityContext;
+    const s = new Settings();
+    s.accountId = this.accountId.trim();
+    s.databaseId = this.databaseId.trim();
+    s.apiToken = this.apiToken.trim();
+    s.deviceAlias = this.deviceAlias.trim() || 'é¸¿è’™è®¾å¤‡';
+    s.deviceId = this.deviceId || ('harmony-' + Math.random().toString(36).slice(2, 10));
+    await SettingsStore.save(ctx, s);
+    promptAction.showToast({ message: 'å·²ä¿å­˜', duration: 1500 });
+  }
+
+  async test(): Promise<void> {
+    if (this.testing) return;
+    this.testing = true;
+    this.testResult = '';
+    try {
+      const ctx = getContext(this) as common.UIAbilityContext;
+      await this.save();
+      const s = await SettingsStore.get(ctx);
+      const client = new D1Client(s);
+      const r = await client.ensureSchema();
+      this.testResult = r.ok ? 'âœ… è¿æ¥æˆåŠŸï¼Œè¡¨ç»“æ„å·²å°±ç»ª' : 'âŒ ' + r.error;
+    } catch (e) {
+      this.testResult = 'âŒ ' + String((e as Error).message || e);
+    } finally {
+      this.testing = false;
+    }
+  }
+}
+ÀÔrD“ª@kit.ArkUI´../services/D1Client·../common/SettingsStoreÔrE—ªassertions¨external¢id¤meta±moduleSideEffectsªresolvedByµsyntheticNamedExportsAÃÙR hvigor_ignore__Users_peiqixin_Library_OpenHarmony_Sdk_20_ets_kits_@kit.ArkUI.d.tsÔrF‘¯hostModulesInfo’ÔrG’²hostDependencyName®hostModuleNameª@kit.ArkUI¥entryGª@kit.ArkUI¥entryÃªoh-resolveÂEAÂÙ[/Users/peiqixin/work/b-zhan/bilibili-usage-harmony/entry/src/main/ets/services/D1Client.etsAÃªoh-resolveÂEAÂÙ^/Users/peiqixin/work/b-zhan/bilibili-usage-harmony/entry/src/main/ets/common/SettingsStore.etsAÃªoh-resolveÂ“ÔrH–§version¤fileªsourceRoot§sources¥names¨mappings«Settings.js ‘¬Settings.etsÜ,š”    ”  ”	  	”  ”  ”  ”  ”%  %”1  1”2  2š”   ” ”	 	” ” ”   ”" "”( (”ÌA ÌA”ÌB ÌB˜”   ” ”	 	” ” ” ”/ /”0 0–”   ” ”
+ 
+” ” ” –”   ” ”	 	” ” ” –”   ” ” ” ” ” ’” ” ‘” 	 ’”8 ”: ’”9 ”;  ’”7 ”9 ’”: ”Ì@ %’”7 ”9 ’”6 ”; !’”9 ”;  ‘” ’” 	” ’” 	” ’” 	” ’” 	” ’” 	” ’” 	” ’” 	” ’” 	” ’” 	” ’” 	” ’” 	” ’” 	” ’” 	” ’” 	” ”” ”	 ”
+ ” ™” ” 
+” ” ” ” ”# ”$ ;”% <œ” ” 
+” ” ” ”% !”& "”) %”* &”- )”. *”/ +™” ” ” 	” ” ” ” ”$  ”% !™” ” ” 	” ” ” ” ”& "”' #™” ” ” 	” ” ” ” ”" ”# ™” ” ” 	” ” ” ” ”( $”) %™” ” ” 	” ” ” ” ”" ”# ’” ” ‘” ’” ” 
+–” ” 
+” ÌM” ÌM
+” ÌM” ÌM–” ” 
+” ÌM” ÌM” ÌM”  ÌM –” ” 
+” ÌM"”" ÌM1”# ÌM2”, ÌM;’”  ”  ’” !” !–” !” !” +	” +” +” +–” !” !” +” +” +” +!–” !” !” +#” +2”  +3”$ +7”” "
+” "” "” "–” "
+” "” "” "” "” "–” "
+” "” "!” "*” "+”$ "4–” "
+” "” "6” "=” ">” "?œ” "
+” "” #” #” #” #” #” #”% #!”& #"”* #&”, #(’” "
+” "”” $
+” $” $” $–” $
+” $” $” $” $” $ –” $
+” $” $"” $,” $-” $0–” $
+” $” $2” $;” $<”$ $ÌEš” $
+” $” %” %” %” %” %”  %”! %”# %–” $
+” $” %!” %-” %.” %/’” $
+” $”” &
+” &”# &”' &–” &
+” &” '” '” '” '–” &
+” &” '” ' ” '!” '#˜” &
+” &” '%” ')” '*”" '4”# '5”* '<–” &
+” &” (”" (”# (”, (&–” &
+” &” ((” (1” (2”! (6œ” &
+” &” )” )” )” )”  )”! )”% )”& ) ”* )$”, )&’” &
+” &’” !” !’” -” -–” -” -” ÌH	” ÌH” ÌH” ÌH˜” -” -” ÌI	” ÌI” ÌI”- ÌI#”. ÌI$”3 ÌI)–” -” -” ÌJ	” ÌJ” ÌJ” ÌJ”” .
+” .” .”' .–” .
+” .” . ” .(” .)” .+–” .
+” .” .-” .7” .8” .;–” .
+” .” .=” .ÌF” .ÌG” .ÌJš” .
+” .” .ÌL” .ÌR” .ÌS” .ÌU”  .Ì[”" .Ì]”# .Ì^”% .Ì`’” .
+” .Ü ” 0
+” 0” 0” 0” 0”* 0!”, 0#”0 0'”1 0(”: 01”< 03”= 04”> 05”Ì@ 07”ÌC 0:”ÌG 0>”ÌH 0?”ÌQ 0ÌH”ÌT 0ÌK”ÌU 0ÌL”ÌV 0ÌM”ÌW 0ÌN”ÌX 0ÌO”ÌY 0ÌPÜ ” 1
+” 1” 1” 1” 1”+ 1"”- 1$”1 1(”2 1)”< 13”> 15”? 16”Ì@ 17”ÌB 19”ÌE 1<”ÌI 1Ì@”ÌJ 1ÌA”ÌT 1ÌK”ÌW 1ÌN”ÌX 1ÌO”ÌY 1ÌP”ÌZ 1ÌQ”Ì[ 1ÌR”Ì\ 1ÌSÜ ” 2
+” 2” 2” 2” 2”) 2 ”+ 2"”/ 2&”0 2'”8 2/”: 21”; 22”< 23”> 25”ÌA 28”ÌE 2<”ÌF 2=”ÌN 2ÌE”ÌQ 2ÌH”ÌR 2ÌI”ÌS 2ÌJ”ÌT 2ÌK”ÌU 2ÌL”ÌW 2ÌN”Ì[ 2ÌR”Ì\ 2ÌS’” 4
+” 4” 4
+” 4” 4” 4” 4” 4”  4 ”" 4"”$ 4$”& 4&”, 4,”. 4.”0 40”2 42”” 6
+” 6” 6” 6–” 6
+” 6” 6” 6” 6 ” 6"–” 6
+” 6” 6$” 6.” 6/” 62–” 6
+” 6” 64” 6=” 6>” 6ÌAš” 6
+” 6” 6ÌC” 6ÌI” 6ÌJ” 6ÌL”  6ÌR”" 6ÌT”# 6ÌU”% 6ÌW’” 6
+” 6Ü ” 7
+” 7” 7” 7” 7”$ 7”& 7”* 7!”+ 7"”6 7-”8 7/”9 70”: 71”< 73”? 76”ÌC 7:”ÌD 7;”ÌO 7ÌF”ÌR 7ÌI”ÌS 7ÌJ”ÌT 7ÌK”ÌU 7ÌL”ÌV 7ÌM”ÌW 7ÌN˜” 8
+” 8” 8”% 8”( 8”, 8#”- 8$”5 8,–” 8
+” 8” 8.” 86” 87” 89–” 8
+” 8” 8;” 8ÌD” 8ÌE”# 8ÌMš” 8
+” 8” 8ÌO” 8ÌU” 8ÌV” 8ÌX” 8Ì[” 8Ì]”  8Ì^”" 8Ì`’” 8
+” 8’” :
+” :” :
+” :” :” :” :” :”  : ”" :"”$ :$”& :&”, :,”. :.”0 :0”2 :2’” <
+” <” =” =”# =”' =”( =”/ =”0 = ”1 =!”2 ="”8 =(”9 =)”: =*”; =+”ÌA =1–” =” =” >” >” >” >–” =” =” >” >"” >#” >%˜” =” =” >'” >+” >,”" >6”# >7”* >>Ü ” =” =” ?”" ?”# ?”' ?#”( ?$”/ ?+”0 ?,”1 ?-”2 ?.”8 ?4”9 ?5”: ?6”; ?7”? ?;–” =” =” Ì@” Ì@” Ì@”& Ì@"–” =” =” ÌA” ÌA”  ÌA”! ÌAœ” =” =” ÌB” ÌB” ÌB” ÌB”  ÌB”! ÌB”% ÌB!”& ÌB"”* ÌB&”, ÌB(’” =” =’” <
+” <–” ÌD
+” ÌD” ÌD” ÌD” ÌD”! ÌD–” ÌE” ÌE”$ ÌE”( ÌE”) ÌE”3 ÌE –” ÌE” ÌE” ÌE"”% ÌE*”& ÌE+”( ÌE-–” ÌE” ÌE” ÌE/”& ÌE8”' ÌE9”/ ÌEÌAš” ÌE” ÌE” ÌEÌC”# ÌEÌI”$ ÌEÌJ”& ÌEÌL”) ÌEÌO”+ ÌEÌQ”, ÌEÌR”. ÌEÌT’” ÌE” ÌE‘” ÌF‘” ÌF’” -” -’”  ”  ’” ” 
+‘” ÌN›” ÌP”	 ÌP”
+ ÌP” ÌP” ÌP ” ÌP-” ÌP/”  ÌPÌL”" ÌPÌN”- ÌPÌb”2 ÌPÌg’” ÌQ” ÌQ
+˜” ÌQ” ÌQ
+” Ì]” Ì]” Ì]”- Ì]”. Ì] ”3 Ì]%–” ÌQ” ÌQ
+” Ì^” Ì^
+” Ì^” Ì^”” ÌR” ÌR
+” ÌR” ÌR–” ÌR” ÌR
+” ÌR” ÌR” ÌR” ÌR–” ÌR” ÌR
+” ÌR” ÌR(” ÌR)”# ÌR1’” ÌR” ÌR
+” ÌS” ÌS” ÌS” ÌS”# ÌS”% ÌS”* ÌS”, ÌS”7 ÌS*”9 ÌS,”? ÌS2”ÌB ÌS5”ÌG ÌS:”ÌI ÌS<Ü ” ÌS” ÌS” ÌT	” ÌT” ÌT”# ÌT”$ ÌT”% ÌT”& ÌT”/ ÌT"”0 ÌT#”8 ÌT+”9 ÌT,”: ÌT-”; ÌT.”ÌD ÌT7”ÌE ÌT8”ÌK ÌT>–” ÌS” ÌS” ÌU	” ÌU” ÌU”! ÌU–” ÌS” ÌS” ÌV	” ÌV” ÌV” ÌV–” ÌS” ÌS” ÌW	”% ÌW”& ÌW”/ ÌW"–” ÌS” ÌS” ÌX	”" ÌX”# ÌX”$ ÌX” ÌS” ÌS” ÌY	” ÌY” ÌY”  ÌY”$ ÌY”& ÌY”( ÌY”* ÌY”/ ÌY"”1 ÌY$”3 ÌY&”5 ÌY(” ÌS” ÌS” ÌZ	” ÌZ” ÌZ” ÌZ”" ÌZ”$ ÌZ”% ÌZ”' ÌZ”- ÌZ ”/ ÌZ"”1 ÌZ$”3 ÌZ&” ÌS” ÌS” Ì[	” Ì[” Ì[”  Ì[”! Ì[”# Ì[”% Ì[ ”& Ì[!”. Ì[)”/ Ì[*”0 Ì[+”1 Ì[,’” ÌQ” ÌQ
+‘” Ì_”” Ìa”	 Ìa”
+ Ìa” Ìa™” Ìb” Ìb
+” Ìb” Ìb” Ìb” Ìb”# Ìb”$ Ìb;”% Ìb<˜” Ìc” Ìc
+” Ìc” Ìc” Ìc” Ìc”  Ìc”! Ìcœ” Ìd”	 Ìd”
+ Ìd” Ìd” Ìd” Ìd” Ìd”$ Ìd ”% Ìd!”) Ìd%”+ Ìd'”, Ìd(œ” Ìe”	 Ìe”
+ Ìe” Ìe” Ìe” Ìe” Ìe”& Ìe"”' Ìe#”+ Ìe'”- Ìe)”. Ìe*œ” Ìf”	 Ìf”
+ Ìf” Ìf” Ìf” Ìf” Ìf”" Ìf”# Ìf”' Ìf#”) Ìf%”* Ìf&” Ìg”	 Ìg”
+ Ìg” Ìg” Ìg” Ìg” Ìg”( Ìg$”) Ìg%”- Ìg)”/ Ìg+”3 Ìg/”9 Ìg5”: Ìg6Ü ” Ìh”	 Ìh”
+ Ìh” Ìh” Ìh” Ìh” Ìh”" Ìh”& Ìh"”' Ìh#”1 Ìh-”4 Ìh0”8 Ìh4”9 Ìh5”? Ìh;”ÌA Ìh=”ÌB Ìh>”ÌJ ÌhÌF”ÌK ÌhÌG”ÌM ÌhÌI”ÌN ÌhÌJ”ÌO ÌhÌK”ÌT ÌhÌP”ÌU ÌhÌQ”ÌV ÌhÌR”ÌX ÌhÌT”ÌZ ÌhÌV”Ì[ ÌhÌW”Ì\ ÌhÌX”Ì] ÌhÌY›” Ìi” Ìi
+” Ìi” Ìi”  Ìi”! Ìi”$ Ìi ”& Ìi"”' Ìi#”( Ìi$”) Ìi%Ü ” Ìj” Ìj” Ìj” Ìj” Ìj”! Ìj”( Ìj$”* Ìj&”/ Ìj+”1 Ìj-”9 Ìj5”; Ìj7”? Ìj;”ÌA Ìj=”ÌB Ìj>”ÌC Ìj?’” Ìk” Ìk”” Ìm”	 Ìm”
+ Ìm” Ìm•” Ìn” Ìn” Ìn” Ìn” Ìn’” Ìn” Ìn—” Ìo” Ìo” Ìo	” Ìo” Ìo” Ìo” Ìo—” Ìp” Ìp” Ìp	” Ìp” Ìp” Ìp” Ìp’” Ìq” Ìq™” Ìr” Ìr” Ìr” Ìr”" Ìr”# Ìr”' Ìr!”( Ìr=”) Ìr>—” Ìs” Ìs” Ìs” Ìs” Ìs” Ìs” Ìsœ” Ìt” Ìt” Ìt” Ìt” Ìt”) Ìt#”* Ìt$”- Ìt'”. Ìt(”1 Ìt+”2 Ìt,”3 Ìt-š” Ìu” Ìu” Ìu” Ìu” Ìu”' Ìu!”( Ìu"”) Ìu#”* Ìu$”+ Ìu%š” Ìv” Ìv” Ìv” Ìv” Ìv”" Ìv”# Ìv”/ Ìv)”1 Ìv+”2 Ìv,Ü ” Ìw” Ìw
+” Ìw” Ìw” Ìw” Ìw”  Ìw”" Ìw”# Ìw”$ Ìw”% Ìw”4 Ìw.”5 Ìw/”6 Ìw0”7 Ìw1”; Ìw5”> Ìw8”? Ìw9”Ì@ Ìw:”ÌE Ìw?”ÌF ÌwÌ@‘”	 Ìx”” Ìx” Ìx” Ìx” ÌxÜ ” Ìy” Ìy
+” Ìy” Ìy” Ìy”" Ìy”% Ìy”+ Ìy%”, Ìy'”- Ìy2”. Ìy3”5 Ìy:”9 Ìy>”: Ìy?”; ÌyÌ@”< ÌyÌA‘”	 Ìz‘” Ìz—” Ì{” Ì{
+” Ì{” Ì{” Ì{”  Ì{”! Ì{‘”	 Ì|’” Ì}” Ì}ÔrI–§version¤file§sources®sourcesContent¥names¨mappingsÀ‘À‘ÀÜ5‘”    ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”  	 ‘”  
+ ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”    ‘”  ! ‘”  " ‘”  # ‘”  $ ‘”  % ‘”  & ‘”  ' ‘”  ( ‘”  ) ‘”  * ‘”  + ‘”  , ‘”  - ‘”  . ‘”  / ‘”  0 ‘”  1 ‘”  2 ‘”  3 ‘”  4 ‘”  5 ‘”  6 ‘”  7 ‘”  8 ‘”  9 ‘”  : ‘”  ; ‘”  < ‘”  = ‘”  > ‘”  ? ‘”  Ì@ ‘”  ÌA ‘”  ÌB ‘”  ÌC ‘”  ÌD ‘”  ÌE ‘”  ÌF ‘”  ÌG ‘”  ÌH ‘”  ÌI ‘”  ÌJ ‘”  ÌK ‘”  ÌL ‘”  ÌM ‘”  ÌN ‘”  ÌO ‘”  ÌP ‘”  ÌQ ‘”  ÌR ‘”  ÌS ‘”  ÌT ‘”  ÌU ‘”  ÌV ‘”  ÌW ‘”  ÌX ‘”  ÌY ‘”  ÌZ ‘”  Ì[ ‘”  Ì\ ‘”  Ì] ‘”  Ì^ ‘”  Ì_ ‘”  Ì` ‘”  Ìa ‘”  Ìb ‘”  Ìc ‘”  Ìd ‘”  Ìe ‘”  Ìf ‘”  Ìg ‘”  Ìh ‘”  Ìi ‘”  Ìj ‘”  Ìk ‘”  Ìl ‘”  Ìm ‘”  Ìn ‘”  Ìo ‘”  Ìp ‘”  Ìq ‘”  Ìr ‘”  Ìs ‘”  Ìt ‘”  Ìu ‘”  Ìv ‘”  Ìw ‘”  Ìx ‘”  Ìy ‘”  Ìz ‘”  Ì{ ‘”  Ì| ‘”  Ì} ‘”  Ì~ ‘”  Ì ‘”  Ì€ ‘”  Ì ‘”  Ì‚ ‘”  Ìƒ ‘”  Ì„ ‘”  Ì… ‘”  Ì† ‘”  Ì‡ ‘”  Ìˆ ‘”  Ì‰ ‘”  ÌŠ ‘”  Ì‹ ‘”  ÌŒ ‘”  Ì ‘”  Ì ‘”  Ì ‘”  Ì ‘”  Ì‘ ‘”  Ì’ ‘”  Ì“ ‘”  Ì” ‘”  Ì• ‘”  Ì– ‘”  Ì— ‘”  Ì˜ ‘”  Ì™ ‘”  Ìš ‘”  Ì› ‘”  Ìœ ‘”  Ì ‘”  Ì ‘”  ÌŸ ‘”  Ì  ‘”  Ì¡ ‘”  Ì¢ ‘”  Ì£ ‘”  Ì¤ ‘”  Ì¥ ‘”  Ì¦ ‘”  Ì§ ‘”  Ì¨ ‘”  Ì© ‘”  Ìª ‘”  Ì« ‘”  Ì¬ ‘”  Ì­ ‘”  Ì® ‘”  Ì¯ ‘”  Ì° ‘”  Ì± ‘”  Ì² ‘”  Ì³ ‘”  Ì´ ‘”  Ìµ ‘”  Ì¶ ‘”  Ì· ‘”  Ì¸ ‘”  Ì¹ ‘”  Ìº ‘”  Ì» ‘”  Ì¼ ‘”  Ì½ ‘”  Ì¾ ‘”  Ì¿ ‘”  ÌÀ ‘”  ÌÁ ‘”  ÌÂ ‘”  ÌÃ ‘”  ÌÄ ‘”  ÌÅ ‘”  ÌÆ ‘”  ÌÇ ‘”  ÌÈ ‘”  ÌÉ ‘”  ÌÊ ‘”  ÌË ‘”  ÌÌ ‘”  ÌÍ ‘”  ÌÎ ‘”  ÌÏ ‘”  ÌĞ ‘”  ÌÑ ‘”  ÌÒ ‘”  ÌÓ ‘”  ÌÔ ‘”  ÌÕ ‘”  ÌÖ ‘”  Ì× ‘”  ÌØ ‘”  ÌÙ ‘”  ÌÚ ‘”  ÌÛ ‘”  ÌÜ ‘”  Ìİ ‘”  ÌŞ ‘”  Ìß ‘”  Ìà ‘”  Ìá ‘”  Ìâ ‘”  Ìã ‘”  Ìä ‘”  Ìå ‘”  Ìæ ‘”  Ìç ‘”  Ìè ‘”  Ìé ‘”  Ìê ‘”  Ìë ‘”  Ìì ‘”  Ìí ‘”  Ìî ‘”  Ìï ‘”  Ìğ ‘”  Ìñ ‘”  Ìò ‘”  Ìó ‘”  Ìô ‘”  Ìõ ‘”  Ìö ‘”  Ì÷ ‘”  Ìø ‘”  Ìù ‘”  Ìú ‘”  Ìû ‘”  Ìü ‘”  Ìı ‘”  Ìş ‘”  Ìÿ ‘”  Í  ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í	 ‘”  Í
+ ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í  ‘”  Í! ‘”  Í" ‘”  Í# ‘”  Í$ ‘”  Í% ‘”  Í& ‘”  Í' ‘”  Í( ‘”  Í) ‘”  Í* ‘”  Í+ ‘”  Í, ‘”  Í- ‘”  Í. ‘”  Í/ ‘”  Í0 ‘”  Í1 ‘”  Í2 ‘”  Í3 ‘”  Í4 ÔrJ’§missing¦pluginÃ¦genAbcÂÔ  ÔrK”²dynamicImportCache¹exportAllDeclarationCache»exportNamedDeclarationCache«importCache“ÔrL•¤type¥start£endªspecifiers¦source±ImportDeclarationÌ€Ì²’ÔrM•¤type¥start£end¨imported¥local¯ImportSpecifierÌ‰ÌÔrN”¤type¥start£end¤nameªIdentifierÌ‰Ì¦routerNªIdentifierÌ‰Ì¦routerM¯ImportSpecifierÌ‘ÌNªIdentifierÌ‘Ì¬promptActionNªIdentifierÌ‘Ì¬promptActionÔrO•¤type¥start£end¥value£raw§LiteralÌ¥Ì±ª@kit.ArkUI¬'@kit.ArkUI'L±ImportDeclarationÌ´Ìö’M¯ImportSpecifierÌ½ÌÊNªIdentifierÌ½ÌÊ­SettingsStoreNªIdentifierÌ½ÌÊ­SettingsStoreM¯ImportSpecifierÌÌÌÔNªIdentifierÌÌÌÔ¨SettingsNªIdentifierÌÌÌÔ¨SettingsO§LiteralÌÜÌõ·../common/SettingsStore¹'../common/SettingsStore'L±ImportDeclarationÌøÍ(‘M¯ImportSpecifierÍÍ	NªIdentifierÍÍ	¨D1ClientNªIdentifierÍÍ	¨D1ClientO§LiteralÍÍ'´../services/D1Client¶'../services/D1Client'

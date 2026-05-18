@@ -38,9 +38,8 @@ const rangeTabs = $("rangeTabs");
 const rangeSummary = $("rangeSummary");
 const trendCanvas = $("trendChart");
 const trendLegend = $("trendLegend");
-const hourChart = $("hourChart");
 const hourChartWrap = $("hourChartWrap");
-const hourTooltip = $("hourTooltip");
+const hourBars = $("hourBars");
 const dayTitle = $("dayTitle");
 const daySub = $("daySub");
 const deviceList = $("deviceList");
@@ -77,7 +76,7 @@ async function bootstrap() {
 function startStatusPolling() {
   stopStatusPolling();
   // 每 2 秒拉一次状态，只刷今日总时长、chip、调试，不重画图表。
-  statusTimer = window.setInterval(() => { refreshStatus().catch(() => {}); }, 2000);
+  statusTimer = window.setInterval(() => { refreshStatus().catch(() => {}); }, 1000);
 }
 
 function stopStatusPolling() {
@@ -235,13 +234,9 @@ async function refreshDayDetail() {
   renderDeviceList(resp.devices || [], resp.hoursByDevice || {});
 }
 
-// 24h 图缓存（用于 tooltip 计算）
-let _hourSeries = [];
-let _hourXs = [];
-let _hourPad = null;
-let _hourNiceMax = 0;
+// （24h 柱图改为纯 DOM，canvas 缓存变量已移除）
 
-/** 按设备在列表中的序号分配颜色，每台设备独立一种颜色（不再区分 source） */
+/** 按设备在列表中的序号分配颜色，每台设备独立一种颜色 */
 function assignSeriesColors(deviceIds, hoursByDevice) {
   return deviceIds.map((id, idx) => {
     const info = hoursByDevice[id] || {};
@@ -251,20 +246,18 @@ function assignSeriesColors(deviceIds, hoursByDevice) {
 }
 
 /**
- * 24h 多设备多色折线图。
- * @param {Array}  hours         全设备汇总 [{hour, durationMs}×24]
- * @param {Object} hoursByDevice { deviceId: { source, sourceLabel, alias, hours:[…×24] } }
- * @param {Array}  devices       [{deviceId, source, sourceLabel, deviceAlias}]
+ * 24h 多设备分组柱状图（纯 DOM）。
+ * Tooltip 为单例 div 挂在 .hour-bars 上，mouseover 时定位，避免被 overflow 裁切。
  */
 function drawHourChart(hours, hoursByDevice, devices) {
-  if (!hourChart) return;
+  if (!hourBars) return;
 
   const deviceIds = Object.keys(hoursByDevice || {});
   const hasData = deviceIds.length > 0;
   if (hourChartWrap) hourChartWrap.style.display = hasData ? "" : "none";
+  hourBars.innerHTML = "";
   if (!hasData) return;
 
-  // 用统一的颜色分配（与 renderDeviceList 共享）
   const seriesMeta = assignSeriesColors(deviceIds, hoursByDevice);
   const series = seriesMeta.map(({ id, info, colorIdx, color }) => {
     const label = info.alias || id.slice(0, 8);
@@ -273,159 +266,101 @@ function drawHourChart(hours, hoursByDevice, devices) {
              data: normalizeHours(info.hours || []), color };
   });
 
-  const ctx = hourChart.getContext("2d");
-  resizeCanvas(hourChart, ctx);
-  const w = hourChart.clientWidth;
-  const h = hourChart.clientHeight;
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = "#FFFFFF";
-  ctx.fillRect(0, 0, w, h);
-
-  const padding = { top: 28, right: 12, bottom: 22, left: 48 };
-  const innerW = w - padding.left - padding.right;
-  const innerH = h - padding.top - padding.bottom;
-
+  // Y 轴固定最大值 = 1 小时，超出时撑开
   let rawMax = 0;
   for (const s of series) for (const pt of s.data) rawMax = Math.max(rawMax, pt.durationMs || 0);
-  if (rawMax <= 0) {
-    ctx.fillStyle = INK_MUTE; ctx.font = "12px sans-serif"; ctx.textAlign = "center";
-    ctx.fillText("该天暂无时段数据", w / 2, h / 2); return;
-  }
-  const niceMax = niceCeilMs(rawMax);
+  if (rawMax <= 0) { hourBars.innerHTML = `<div style="padding:16px;color:${INK_MUTE};font-size:12px;text-align:center">该天暂无时段数据</div>`; return; }
+  const yMax = Math.max(3_600_000, rawMax);
 
-  // 图例（右上角，从右向左：色块 → 文字 → 间距）
-  ctx.font = "9px sans-serif"; ctx.textBaseline = "middle";
-  let lx = w - padding.right;
-  for (let i = series.length - 1; i >= 0; i--) {
-    const s = series[i];
-    const lbl = `${s.srcLabel}·${s.label}`;
-    const tw = ctx.measureText(lbl).width;
-    // 从右往左：间距4 → 文字 → 间距4 → 色块10 → 间距4
-    lx -= 4;
-    lx -= tw;
-    const textX = lx;
-    lx -= 4;
-    // 色块
-    ctx.fillStyle = s.color.line;
-    ctx.fillRect(lx - 10, padding.top / 2 - 1.5, 10, 3);
-    lx -= 10;
-    // 文字
-    ctx.fillStyle = s.color.line;
-    ctx.fillText(lbl, textX, padding.top / 2);
-    lx -= 4;
-  }
+  // 清除旧图例
+  hourChartWrap.querySelectorAll(".hour-legend").forEach(el => el.remove());
 
-  // Y 轴
-  ctx.strokeStyle = GRID; ctx.lineWidth = 1;
-  ctx.fillStyle = INK_MUTE; ctx.font = "10px sans-serif";
-  ctx.textAlign = "right"; ctx.textBaseline = "middle";
-  for (let i = 0; i <= 4; i++) {
-    const y = padding.top + (innerH * i) / 4;
-    ctx.beginPath(); ctx.moveTo(padding.left, y); ctx.lineTo(padding.left + innerW, y); ctx.stroke();
-    ctx.fillText(axisLabelMs(niceMax * (1 - i / 4)), padding.left - 4, y);
-  }
-
-  const n = 24;
-  const stepX = innerW / (n - 1);
-  const xs = Array.from({ length: n }, (_, i) => padding.left + stepX * i);
-
+  // 图例
+  const legendEl = document.createElement("div");
+  legendEl.className = "hour-legend";
   for (const s of series) {
-    s._ys = s.data.map(pt => {
-      const ms = pt.durationMs || 0;
-      if (ms <= 0) return padding.top + innerH;
-      return Math.min(padding.top + innerH - (ms / niceMax) * innerH, padding.top + innerH - 2);
+    const item = document.createElement("div");
+    item.className = "hour-legend-item";
+    item.innerHTML = `<span class="hour-legend-dot" style="background:${s.color.line}"></span><span>${escapeHtml(s.srcLabel)}·${escapeHtml(s.label)}</span>`;
+    legendEl.appendChild(item);
+  }
+  hourChartWrap.insertBefore(legendEl, hourBars);
+
+  const BAR_H = 100; // 与 CSS .hour-col height: 100px 一致
+
+  // 单例 tooltip div 挂在 hourBars 上，不在每个列里，避免被裁切
+  const tip = document.createElement("div");
+  tip.className = "hour-tip";
+  tip.style.display = "none";
+  hourBars.appendChild(tip);
+
+  // 24 列
+  for (let h = 0; h < 24; h++) {
+    const col = document.createElement("div");
+    col.className = "hour-col";
+    col.dataset.hour = String(h);
+
+    const inner = document.createElement("div");
+    inner.className = "hour-col-inner";
+
+    // 各设备色块（从下往上叠），用 px 避免 % 因无父高失效
+    for (const s of series) {
+      const ms = s.data[h]?.durationMs || 0;
+      if (ms <= 0) continue;
+      const px = Math.max(1, Math.round((ms / yMax) * BAR_H));
+      const seg = document.createElement("div");
+      seg.className = "hour-seg";
+      seg.style.cssText = `height:${px}px;background:${s.color.line};opacity:0.85;`;
+      inner.appendChild(seg);
+    }
+    col.appendChild(inner);
+
+    // X 轴标签
+    if (h === 0 || h === 6 || h === 12 || h === 18 || h === 23) {
+      const lbl = document.createElement("span");
+      lbl.className = "hour-label";
+      lbl.textContent = String(h);
+      col.appendChild(lbl);
+    }
+
+    // hover 事件：定位并显示单例 tooltip
+    col.addEventListener("mouseenter", () => {
+      const hasAny = series.some(s => (s.data[h]?.durationMs || 0) > 0);
+      let html = `<div class="hour-tip-header">${h}:00 – ${h + 1}:00</div>`;
+      if (!hasAny) {
+        html += `<div style="font-size:10px;color:${INK_MUTE}">无记录</div>`;
+      } else {
+        for (const s of series) {
+          const ms = s.data[h]?.durationMs || 0;
+          if (ms <= 0) continue;
+          html += `<div class="hour-tip-row">
+            <span class="hour-tip-dot" style="background:${s.color.line}"></span>
+            <span class="hour-tip-name">${escapeHtml(s.srcLabel)}·${escapeHtml(s.label)}</span>
+            <span class="hour-tip-time">${formatDuration(ms)}</span>
+          </div>`;
+        }
+      }
+      tip.innerHTML = html;
+      tip.style.display = "block";
+
+      // 定位：以列中心为基准，防止超出左右边界
+      const barsRect = hourBars.getBoundingClientRect();
+      const colRect  = col.getBoundingClientRect();
+      const colCenterX = colRect.left - barsRect.left + colRect.width / 2;
+      const tipW = tip.offsetWidth || 130;
+      let left = colCenterX;
+      // 防止超出右边界
+      if (left + tipW / 2 > barsRect.width - 4) left = barsRect.width - tipW / 2 - 4;
+      // 防止超出左边界
+      if (left - tipW / 2 < 4) left = tipW / 2 + 4;
+      tip.style.left = left + "px";
+      // 底部对齐柱子区域顶端上方 6px
+      tip.style.bottom = (BAR_H + 6) + "px";
     });
+    col.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+
+    hourBars.appendChild(col);
   }
-
-  // 填充面积
-  for (let si = series.length - 1; si >= 0; si--) {
-    const s = series[si];
-    const grad = ctx.createLinearGradient(0, padding.top, 0, padding.top + innerH);
-    grad.addColorStop(0, s.color.fill);
-    grad.addColorStop(1, s.color.fill.replace(/[\d.]+\)$/, "0.01)"));
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.moveTo(xs[0], padding.top + innerH); ctx.lineTo(xs[0], s._ys[0]);
-    for (let i = 1; i < n; i++) {
-      const mx = (xs[i-1]+xs[i])/2;
-      ctx.bezierCurveTo(mx, s._ys[i-1], mx, s._ys[i], xs[i], s._ys[i]);
-    }
-    ctx.lineTo(xs[n-1], padding.top + innerH); ctx.closePath(); ctx.fill();
-  }
-
-  // 折线 + 圆点
-  for (const s of series) {
-    ctx.strokeStyle = s.color.line; ctx.lineWidth = 1.8;
-    ctx.lineJoin = "round"; ctx.lineCap = "round";
-    ctx.beginPath(); ctx.moveTo(xs[0], s._ys[0]);
-    for (let i = 1; i < n; i++) {
-      const mx = (xs[i-1]+xs[i])/2;
-      ctx.bezierCurveTo(mx, s._ys[i-1], mx, s._ys[i], xs[i], s._ys[i]);
-    }
-    ctx.stroke();
-    for (let i = 0; i < n; i++) {
-      if ((s.data[i]?.durationMs || 0) <= 0) continue;
-      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(xs[i], s._ys[i], 3, 0, Math.PI*2); ctx.fill();
-      ctx.fillStyle = s.color.line; ctx.beginPath(); ctx.arc(xs[i], s._ys[i], 1.9, 0, Math.PI*2); ctx.fill();
-    }
-  }
-
-  // X 轴
-  ctx.fillStyle = INK_SOFT; ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.font = "9px sans-serif";
-  const stepLabel = innerW/24>=14?1:innerW/24>=9?2:innerW/24>=6?3:6;
-  for (let i = 0; i < 24; i++) {
-    if (i%stepLabel!==0 && i!==23) continue;
-    ctx.fillText(`${i}`, xs[i], padding.top + innerH + 4);
-  }
-
-  // 缓存供 tooltip 使用
-  _hourSeries = series; _hourXs = xs; _hourPad = padding; _hourNiceMax = niceMax;
-
-  // 绑定 mousemove（每次重画后重绑，确保最新数据）
-  hourChart.onmousemove = (e) => showHourTooltip(e, w, padding);
-  hourChart.onmouseleave = () => { if (hourTooltip) hourTooltip.style.display = "none"; };
-}
-
-function showHourTooltip(e, canvasW, padding) {
-  if (!hourTooltip || !_hourSeries.length || !_hourXs.length) return;
-  const rect = hourChart.getBoundingClientRect();
-  const mx = (e.clientX - rect.left) * (hourChart.width / rect.width);
-  if (!padding) return;
-  const innerW = canvasW - padding.left - padding.right;
-  const stepX = innerW / 23;
-  let hour = Math.round((mx - padding.left) / stepX);
-  hour = Math.max(0, Math.min(23, hour));
-
-  const lines = [];
-  for (const s of _hourSeries) {
-    const ms = s.data[hour]?.durationMs || 0;
-    if (ms <= 0) continue;
-    lines.push({ label: `${s.srcLabel}·${s.label}`, ms, color: s.color.line });
-  }
-
-  let html = `<div style="font-weight:600;font-size:11px;margin-bottom:4px;color:#1f1f23">${hour}:00 – ${hour+1}:00</div>`;
-  if (lines.length === 0) {
-    html += `<div style="color:#b6afb9;font-size:10px">无使用记录</div>`;
-  } else {
-    for (const ln of lines) {
-      html += `<div style="display:flex;align-items:center;gap:5px;margin-top:2px">
-        <span style="width:8px;height:8px;border-radius:50%;background:${ln.color};flex-shrink:0"></span>
-        <span style="font-size:10px;color:#1f1f23">${escapeHtml(ln.label)}</span>
-        <span style="font-size:10px;color:#6b6470;margin-left:auto;padding-left:8px">${formatDuration(ln.ms)}</span>
-      </div>`;
-    }
-  }
-  hourTooltip.innerHTML = html;
-  hourTooltip.style.display = "block";
-
-  // 定位：跟随鼠标，避免溢出
-  const wrapRect = hourChartWrap.getBoundingClientRect();
-  let tx = e.clientX - wrapRect.left + 12;
-  if (tx + 130 > wrapRect.width) tx = e.clientX - wrapRect.left - 130 - 8;
-  let ty = e.clientY - wrapRect.top - 10;
-  if (ty < 0) ty = 0;
-  hourTooltip.style.left = tx + "px";
-  hourTooltip.style.top = ty + "px";
 }
 
 function normalizeHours(hours) {
@@ -551,7 +486,7 @@ function drawTrend(_unused, errorMsg) {
     return;
   }
 
-  const padding = { top: 28, right: 14, bottom: 26, left: 54 };
+  const padding = { top: 28, right: 14, bottom: 26, left: 34 };
   const innerW = w - padding.left - padding.right;
   const innerH = h - padding.top - padding.bottom;
   // 从旧到新从左到右

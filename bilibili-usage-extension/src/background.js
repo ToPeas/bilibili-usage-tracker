@@ -14,7 +14,7 @@ const DEFAULT_SETTINGS = {
   cloudflareApiToken: "",
   deviceId: "",
   deviceAlias: "",
-  appVersion: "1.2.0"
+  appVersion: "1.3.2"
 };
 
 const DISPLAY_TIME_ZONE = "Asia/Shanghai";
@@ -133,16 +133,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 async function reconcile() {
   const context = await getCurrentContext();
-  // 不再依赖 chrome.idle：看视频可能不动键鼠 1 分钟以上会被误判 idle。
-  // content.js 已经只在 document.visible 时上报，足够代表「正在看」。
   const shouldTrack = TARGET_HOSTS.has(context.host) && context.focused;
-  state.active = shouldTrack;
-  state.host = shouldTrack ? context.host : "";
-  state.tabId = shouldTrack ? context.tabId : 0;
-  if (!shouldTrack) {
-    state.lastDeltaAt = 0;
+
+  if (shouldTrack) {
+    // 确认在 B 站且聚焦，正常更新 state
+    state.active = true;
+    state.host = context.host;
+    state.tabId = context.tabId;
+  } else {
+    // 不满足条件时，只有在距上次 delta 超过 15s 后才清除 active，
+    // 避免打开 popup 瞬间（lastFocusedWindow 切换）把正在计时的状态错误清掉。
+    const now = Date.now();
+    if (!state.lastDeltaAt || (now - state.lastDeltaAt) > 15_000) {
+      state.active = false;
+      state.host = "";
+      state.tabId = 0;
+      state.lastDeltaAt = 0;
+    }
   }
-  // 同步 debug 面板所需的最新上下文，否则 popup 拉 status 看到的会是 SW 初始值 "unknown"。
   updateDebug({
     idleState: context.idleState || "active",
     contextHost: context.host || "",
@@ -161,14 +169,21 @@ async function getCurrentContext() {
   if (normalWindow) {
     const tabs = await chrome.tabs.query({ active: true, windowId: normalWindow.id });
     tab = tabs?.[0];
-  } else {
-    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-    tab = tabs?.[0];
+  }
+  if (!tab) {
+    // Orion / 无法获取 window 时 fallback：取最近聚焦窗口的 active tab
+    try {
+      const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      tab = tabs?.[0];
+    } catch (_e) {}
   }
   const idleState = await getIdleState();
-  // 主窗口存在时认为「聚焦」以 popup 可以继续计时，
-  // 仅在整个浏览器都被其它应用颁夺火身时认为失焦。
-  const focused = normalWindow ? (normalWindow.focused === undefined ? true : normalWindow.focused || (normalWindow.state !== "minimized")) : false;
+  // 只在能确认整个浏览器失焦（minimized/unfocused）时才认为不聚焦。
+  // Orion 无法取到 window 信息时默认 focused=true，信任 content 上报。
+  let focused = true;
+  if (normalWindow) {
+    focused = normalWindow.focused !== false && normalWindow.state !== "minimized";
+  }
   return {
     tabId: tab?.id || 0,
     host: getHost(tab?.url),
@@ -207,7 +222,9 @@ async function getIdleState() {
 async function handleUsageDelta(message, sender) {
   const now = Date.now();
   const tabId = sender?.tab?.id || 0;
-  const host = message.host || getHost(message.url);
+  // 直接用 sender.tab.url（content 消息来源页），不依赖 reconcile 快照的 context.host。
+  // 这样打开 popup 导致 lastFocusedWindow 切换后也不影响判断。
+  const host = getHost(sender?.tab?.url) || message.host || getHost(message.url);
   updateDebug({
     lastMessageAt: now,
     lastHost: host,
@@ -216,10 +233,11 @@ async function handleUsageDelta(message, sender) {
     contentFocused: Boolean(message.focused)
   });
   if (!tabId || !TARGET_HOSTS.has(host)) {
-    updateDebug({ lastIgnoredAt: now, lastReason: "ignored host" });
+    updateDebug({ lastIgnoredAt: now, lastReason: `ignored host: ${host || "(empty)"}` });
     return { ok: true, ignored: true, error: "ignored host" };
   }
 
+  // 获取 context 仅用于 debug 面板展示，不参与 shouldTrack 判断
   const context = await getCurrentContext();
   updateDebug({
     contextHost: context.host,
@@ -227,11 +245,10 @@ async function handleUsageDelta(message, sender) {
     contextFocused: context.focused,
     idleState: context.idleState
   });
-  const shouldTrack =
-    message.visible &&
-    context.tabId === tabId &&
-    context.focused &&
-    TARGET_HOSTS.has(context.host);
+
+  // host 来自 sender.tab（content 消息来源），直接验证即可。
+  // 不再检查 context.focused/tabId，让 content.js 决定是否计时。
+  const shouldTrack = TARGET_HOSTS.has(host);
 
   if (!shouldTrack) {
     if (state.tabId === tabId) {
@@ -252,13 +269,16 @@ async function handleUsageDelta(message, sender) {
   const startAt = Math.max(0, endAt - durationMs);
   await addDuration(host, startAt, endAt);
 
-  state.active = true;
-  state.host = host;
-  state.tabId = tabId;
-  state.lastDeltaAt = endAt;
+  // 如果是"tab 变不可见"触发的 flush，计入数据后把 active 标记为 false，
+  // 避免 getStatus 的 liveMs 继续估算（此时用户已不在看 B 站）
+  const tabHidden = message.reason === "hidden" || message.reason === "pagehide";
+  state.active = !tabHidden;
+  state.host = tabHidden ? "" : host;
+  state.tabId = tabHidden ? 0 : tabId;
+  state.lastDeltaAt = tabHidden ? 0 : endAt;
   updateDebug({
     lastAcceptedAt: now,
-    lastReason: "accepted",
+    lastReason: tabHidden ? `accepted+deactivate(${message.reason})` : "accepted",
     lastCountedMs: durationMs
   });
   return { ok: true, countedMs: durationMs };
@@ -285,10 +305,7 @@ function updateDebug(values) {
 }
 
 function getIgnoreReason(message, context, tabId) {
-  if (!message.visible) return "content hidden";
-  if (context.tabId !== tabId) return "not active tab";
-  if (!context.focused) return "window not focused";
-  if (!TARGET_HOSTS.has(context.host)) return "active tab not bilibili";
+  if (!TARGET_HOSTS.has(message.host || "")) return `ignored host: ${message.host}`;
   return "not active";
 }
 
@@ -847,26 +864,35 @@ async function getSettings() {
 }
 
 async function getStatus() {
-  // 调 reconcile 以保证 state.active / state.host 是实时的（popup 打开时尤其重要）
-  await reconcile();
+  // 不调 reconcile，避免副作用地覆盖 state.active。
   const { usage = {}, uploaded = {}, uploadLog = [] } = await chrome.storage.local.get(["usage", "uploaded", "uploadLog"]);
   const today = formatLocalDate(new Date());
   const todayBucket = usage[today] || { byHost: {}, byHour: {} };
-  const todayItems = { ...(todayBucket.byHost || {}) };
 
+  // storage 里今天的真实总量
+  const storedTotal = Object.values(todayBucket.byHost || {}).reduce((s, v) => s + v, 0);
+
+  let displayTotal = storedTotal;
   if (state.active && state.host && state.lastDeltaAt) {
     const now = Date.now();
-    const activeDate = formatLocalDate(new Date(now));
-    if (activeDate === today) {
-      const liveMs = Math.max(0, Math.min(now - state.lastDeltaAt, 5000));
-      todayItems[state.host] = Math.max(0, Math.round((todayItems[state.host] || 0) + liveMs));
+    const elapsed = now - state.lastDeltaAt;
+    if (elapsed > 30_000) {
+      // 超过 30s 没有新 delta，认为已离开
+      state.active = false;
+      state.lastDeltaAt = 0;
+    } else {
+      // liveMs：距上次接受的 delta 经过的时间，上限略超 flush 间隔
+      const liveMs = Math.min(elapsed, 6000);
+      displayTotal = storedTotal + liveMs;
     }
   }
+
+  const todayItems = { ...(todayBucket.byHost || {}) };
   return {
     active: state.active,
     host: state.host,
     today,
-    todayTotalMs: Object.values(todayItems).reduce((s, v) => s + v, 0),
+    todayTotalMs: Math.round(displayTotal),
     todayItems,
     todayHours: Array.from({ length: 24 }, (_, h) => ({ hour: h, durationMs: Number(todayBucket.byHour?.[h]) || 0 })),
     uploaded,
