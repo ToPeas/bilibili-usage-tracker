@@ -1,94 +1,183 @@
-# Bilibili Usage Tracker
+# BiliWatch
 
-这个仓库按 `B站使用时长统计-技术方案.md` 生成了浏览器端 MVP，并把原方案里的云端存储改成插件直连 Cloudflare D1 HTTP API。
+> 跨设备 B 站使用时长统计 — Chrome 插件 · Android App · HarmonyOS（实验性）
 
-## 目录
+**BiliWatch** 让你看清自己每天在 B 站上花了多少时间。无论是在电脑浏览器刷视频，还是用手机/平板开 App，所有设备的数据都汇聚到同一个 Cloudflare D1 数据库，在趋势图和 24 小时热力图中一目了然。
 
-- `bilibili-usage-extension/`：Chrome/Edge Manifest V3 插件，统计当前聚焦窗口里 B 站域名的每日使用时长，并直接写入 D1。
-- `bilibili-usage-android/`：安卓端 APK 项目，通过系统 UsageStatsManager 读取 B 站 App 使用时长并上传 D1。
-- `worker/schema.sql`：D1 建表 SQL。`worker/` 里的 Worker 版本可忽略，除非你之后想改回后端中转。
+---
 
-## 插件能力
+## 截图
 
-- 只在当前激活 Tab 是 B 站域名、浏览器窗口聚焦、系统 idle 状态为 active 时计时。
-- B 站页面通过 content script 每秒累计可见且聚焦的时间，每 5 秒向后台发送增量；后台再校验当前激活 tab、窗口聚焦和系统 idle 状态后入账。
-- **按「日 + 小时」双重分桶**：本地存为 `usage[date]={byHost,byHour}`，跨午夜/跨小时会拆到不同桍；D1端同步入表 `usage_hours`。
-- 每天 00:05 自动补传上一批未上传数据（默认滑动窗 30 天）；也可在 popup / 设置页手动「立即上传」。
-- popup 展示今日总时长、趋势图（8 个可选范围：7 / 30 / 90 / 180 天）、点到某天后可看该日 24 小时分布 + 设备拆分。
-- 设置页支持测试 D1 连接（读 + 写两阶段），并呈现最近上传日志。
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <b>Chrome 插件 · Popup</b><br/>
+      <img src="docs/screenshot-extension.png" alt="Chrome 插件 Popup" width="240"/>
+    </td>
+    <td align="center" width="33%">
+      <b>Android · 趋势图 + 24h 分布</b><br/>
+      <img src="docs/screenshot-android-chart.png" alt="Android 趋势图" width="180"/>
+    </td>
+    <td align="center" width="33%">
+      <b>Android · 多设备拆分</b><br/>
+      <img src="docs/screenshot-android-device.png" alt="Android 设备拆分" width="180"/>
+    </td>
+  </tr>
+</table>
 
-## D1 接入
+---
 
-插件直接调用 Cloudflare D1 Query API：
+## 功能
 
-```text
-POST https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{database_id}/query
-Authorization: Bearer <Cloudflare API Token>
+### 🖥️ Chrome / Edge 插件 `bilibili-usage-extension/`
+
+- **精准计时**：只有 B 站标签页处于前台、窗口聚焦且系统未 idle 时才计时，切换标签页或最小化立即暂停。
+- **按「日 + 小时」双重分桶**：本地以 `usage[date].byHour` 存储，跨午夜自动拆分；D1 端同步写入 `usage_hours` 表。
+- **自动上传**：每天凌晨自动补传最近 30 天内所有未上传数据，也可在 popup 中手动「立即上传」。
+- **趋势 Popup**：7 / 30 / 90 / 180 天范围可切换，折线图点击后展示该日 24 小时分布与全设备拆分。
+- **设置页**：填写 Cloudflare 信息，支持测试 D1 读写连通性，展示近期上传日志。
+
+### 📱 Android App `bilibili-usage-android/`
+
+- 调用系统 `UsageStatsManager` 读取 B 站（含 B 站 HD、海外版）App 的实际使用时长。
+- **全设备汇总**：Hero 区同时显示「本机今日」和「全设备今日总计」（从 D1 拉取）。
+- **使用趋势图**：7 天 / 30 天 / 3 个月 / 半年范围切换，折线图点击查看任意一天的 24 小时分布。
+- **设备拆分**：选中某天后展示当天每台设备的用量与上传时间，配色与趋势图一一对应。
+- **自动上传**：每天早上 **05:00** 后台自动上传；打开 App 时也会静默上传今日数据。
+- **手动同步**：「同步最近 7 天」「上传当前范围」「补传最近半年」三种手动操作。
+- **并发安全**：自动上传与手动上传之间有互斥锁，不会因并发写入导致 D1 报错。
+
+### 🌐 Cloudflare Worker `worker/` （可选）
+
+Worker 为可选的后端中转层，适合不想把 API Token 暴露在客户端的场景。若直接用插件 / App 直连 D1，可忽略此目录，仅参考 `worker/schema.sql` 初始化表结构即可。
+
+### ⚠️ HarmonyOS App `bilibili-usage-harmony/` — 实验性，暂不可用
+
+代码已完成基本框架，但**华为鸿蒙目前不向三方应用开放 App 使用时长查询接口**（`BUNDLE_ACTIVE_INFO` 权限属 `system_basic` 级别，三方不可申请），无法读取 B 站的使用时长数据。待鸿蒙开放相关 API 后可继续完善。
+
+---
+
+## 项目结构
+
+```
+BiliWatch/
+├── bilibili-usage-extension/       # Chrome / Edge MV3 插件（v1.3.3）
+│   ├── src/
+│   │   ├── background.js           # Service Worker：计时调度、本地存储、D1 上传
+│   │   ├── content.js              # 注入 B 站页面，精确累计可见时间
+│   │   ├── popup.js / popup.html   # 弹出窗：趋势折线图 + 24h 热力图 + 设备拆分
+│   │   └── options.js / options.html # 设置页：D1 配置、连接测试、上传日志
+│   └── manifest.json
+│
+├── bilibili-usage-android/         # Android App（v1.3.9，纯 Java，无第三方依赖）
+│   └── app/src/main/java/com/example/biliusage/
+│       ├── MainActivity.java       # 主界面（全部纯代码构建 UI）
+│       ├── UsageCollector.java     # UsageStatsManager 封装
+│       ├── DailyUploadReceiver.java # 定时上传 BroadcastReceiver（每天 05:00）
+│       ├── D1Client.java           # Cloudflare D1 HTTP API 客户端
+│       └── SettingsStore.java      # SharedPreferences 配置存储
+│
+├── bilibili-usage-harmony/         # HarmonyOS App（实验性，暂不可用）
+│
+├── worker/                         # 可选 Cloudflare Worker 后端中转
+│   ├── src/index.js
+│   └── schema.sql                  # D1 建表 SQL（必须执行一次）
+│
+└── docs/                           # 截图与文档资源
 ```
 
-你只需要准备三项：
+---
 
-- Cloudflare Account ID
-- D1 Database ID
-- 有 `D1 Read` 和 `D1 Write` 权限的 Cloudflare API Token
+## 快速开始
 
-如果你愿意用 Wrangler 创建和初始化数据库，可以在 `worker/` 目录执行：
+### 第一步：创建 Cloudflare D1 数据库
+
+1. 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/) → **Workers & Pages → D1** → 新建数据库，命名随意（如 `bili_usage`）。
+2. 进入数据库详情 → **Console** 标签页 → 粘贴并执行 `worker/schema.sql` 中的全部 SQL，完成建表。
+3. 记下以下三项（后面填写到插件/App 的设置中）：
+
+   | 配置项 | 获取位置 |
+   |--------|---------|
+   | **Account ID** | Dashboard 右侧边栏 |
+   | **D1 Database ID** | 数据库详情页 URL 中的 UUID |
+   | **API Token** | [Create Token](https://dash.cloudflare.com/profile/api-tokens)，选 `D1 Edit` 权限模板 |
+
+> 也可以用 Wrangler CLI：
+> ```bash
+> npx wrangler d1 create bili_usage
+> npx wrangler d1 execute bili_usage --file=./worker/schema.sql
+> ```
+
+---
+
+### 第二步：安装 Chrome 插件
+
+1. 打开 Chrome / Edge → 地址栏输入 `chrome://extensions/` → 开启**开发者模式**。
+2. 点击「**加载已解压的扩展程序**」→ 选择仓库中的 `bilibili-usage-extension/` 目录。
+3. 点击插件图标 → 右上角齿轮进入设置页，填入：
+   - Cloudflare Account ID
+   - D1 Database ID  
+   - API Token
+   - Device ID（留空则自动生成 UUID）
+   - Device Alias（如 `家里的 Mac`、`公司的 Mac`）
+4. 点击「**测试连接**」，返回"可读可写"即配置成功。
+
+---
+
+### 第三步：安装 Android App
+
+> **前提**：Android 6.0+，需要授予「使用情况访问权限」。
+
+**方式一：直接安装 APK**
+
+用 Android Studio 打开 `bilibili-usage-android/` 后 Build → 安装到设备。
+
+**方式二：Android Studio Run**
 
 ```bash
-wrangler d1 create bili_usage
+# 连接 Android 设备后
+cd bilibili-usage-android
+./gradlew installDebug
 ```
 
-把输出的 `database_id` 填入 `worker/wrangler.toml`：
+**配置步骤：**
 
-```toml
-[[d1_databases]]
-binding = "DB"
-database_name = "bili_usage"
-database_id = "你的 database_id"
-```
+1. 打开 App → 点击「**打开使用情况权限**」→ 找到本 App → 开启权限。
+2. 下拉到「D1 连接设置」区域，填入与插件**相同**的 Account ID、Database ID、API Token，以及自定义的 Device ID / Device Alias。
+3. 点击「**同步最近 7 天**」，图表刷新后即可看到来自各设备的汇总数据。
 
-初始化表结构：
+---
 
-```bash
-wrangler d1 execute bili_usage --file=./schema.sql
-```
+## D1 数据表
 
-如果不想本地装 Wrangler，也可以在 Cloudflare Dashboard 创建 D1 数据库，然后在 D1 控制台里执行 `worker/schema.sql` 里的 SQL。
+| 表名 | 说明 |
+|------|------|
+| `usage_daily` | 每日每设备汇总，主键 `(date, source, device_id)` |
+| `usage_items` | 每日明细（域名 / 包名级别的细分时长） |
+| `usage_hours` | 每日 24 小时分桶（`hour` 字段范围 0–23） |
 
-## 插件配置
+同一天同一设备重复上传会覆盖旧数据，保证幂等性。
 
-打开插件设置页，填写：
+---
 
-- Cloudflare Account ID：Cloudflare 账户 ID
-- D1 Database ID：D1 数据库 UUID
-- Cloudflare API Token：带 `D1 Read` 和 `D1 Write` 权限的 API Token
-- Device ID：默认会生成 UUID，也可以手动改
-- Device Alias：设备别名，例如 `MacBook`、`Orion`，展示时优先使用它
+## 安全说明
 
-## 直接验证
+- **API Token 仅存储在本地**（Chrome `storage.local` / Android `SharedPreferences`），不经过任何第三方服务器。
+- D1 中只存储时长毫秒数，不包含任何 URL、标题或浏览内容信息。
+- 建议为本项目单独创建权限最小化的 API Token（仅 `D1 Edit`，**不要**使用 Global API Key）。
 
-你可以用 curl 模拟插件写入：
+---
 
-```bash
-curl "https://api.cloudflare.com/client/v4/accounts/$ACCOUNT_ID/d1/database/$DATABASE_ID/query" \
-  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "sql": "SELECT 1 AS ok"
-  }'
-```
+## 版本
 
-## 安装插件
+| 平台 | 版本 |
+|------|------|
+| Chrome 插件 | v1.3.3 |
+| Android App | v1.3.9 (versionCode 19) |
+| HarmonyOS | 实验性，暂不可用 |
 
-1. 打开 Chrome/Edge 的扩展程序页面。
-2. 开启开发者模式。
-3. 选择“加载已解压的扩展程序”，目录选 `bilibili-usage-extension/`。
-4. 打开插件设置页，填写 D1 连接信息。
+---
 
-## D1 表
+## License
 
-- `usage_daily`：每日设备汇总，主键为 `(date, source, device_id)`。
-- `usage_items`：每日明细，记录域名或移动端包名的时长。
-- `usage_meta`：插件测试 D1 读写时自动创建，仅保存 `_connection_test` 记录。
-
-同一天同设备重复上传会覆盖旧数据，保持幂等。
+[MIT](LICENSE)
