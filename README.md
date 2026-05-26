@@ -1,8 +1,8 @@
-# BiliWatch
+# Bilibili Usage Tracker
 
 > 跨设备 B 站使用时长统计 — Chrome 插件 · Android App · HarmonyOS（实验性）
 
-**BiliWatch** 让你看清自己每天在 B 站上花了多少时间。无论是在电脑浏览器刷视频，还是用手机/平板开 App，所有设备的数据都汇聚到同一个 Cloudflare D1 数据库，在趋势图和 24 小时热力图中一目了然。
+**Bilibili Usage Tracker** 让你看清自己每天在 B 站上花了多少时间。无论是在电脑浏览器刷视频，还是用手机/平板开 App，所有设备的数据都汇聚到同一个 Cloudflare D1 数据库，在趋势图和 24 小时热力图中一目了然。
 
 ---
 
@@ -60,7 +60,7 @@ Worker 为可选的后端中转层，适合不想把 API Token 暴露在客户�
 ## 项目结构
 
 ```
-BiliWatch/
+bilibili-usage-tracker/
 ├── bilibili-usage-extension/       # Chrome / Edge MV3 插件（v1.3.3）
 │   ├── src/
 │   │   ├── background.js           # Service Worker：计时调度、本地存储、D1 上传
