@@ -13,7 +13,9 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -80,6 +82,9 @@ public class MainActivity extends android.app.Activity {
      */
     private final AtomicBoolean uploadingNow = new AtomicBoolean(false);
 
+    /** 全屏半透明 Loading 覆盖层 */
+    private View loadingOverlay;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -107,7 +112,13 @@ public class MainActivity extends android.app.Activity {
         root.addView(spacer(14));
         root.addView(buildSettingsCard());
 
-        setContentView(scroll);
+        // FrameLayout 作为根容器，Loading 层叠加在 ScrollView 之上
+        FrameLayout rootFrame = new FrameLayout(this);
+        rootFrame.addView(scroll, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        rootFrame.addView(buildLoadingOverlay());
+
+        setContentView(rootFrame);
         loadSettings();
     }
 
@@ -152,10 +163,60 @@ public class MainActivity extends android.app.Activity {
         }).start();
     }
 
+    // ---------- Loading 覆盖层 ----------
+
+    private View buildLoadingOverlay() {
+        // 半透明黑色背景，居中显示 ProgressBar + 文字
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(0x99000000); // 60% 黑色半透明
+        overlay.setClickable(true); // 阻止点击穿透
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        int pad = dp(32);
+        box.setPadding(pad, pad, pad, pad);
+
+        android.graphics.drawable.GradientDrawable boxBg = new android.graphics.drawable.GradientDrawable();
+        boxBg.setColor(0xFF1E293B);
+        boxBg.setCornerRadius(dp(16));
+        box.setBackground(boxBg);
+
+        ProgressBar spinner = new ProgressBar(this);
+        spinner.getIndeterminateDrawable().setColorFilter(
+                0xFFFB7299, android.graphics.PorterDuff.Mode.SRC_IN);
+        LinearLayout.LayoutParams spinLp = new LinearLayout.LayoutParams(dp(48), dp(48));
+        spinLp.gravity = Gravity.CENTER_HORIZONTAL;
+        box.addView(spinner, spinLp);
+
+        TextView label = new TextView(this);
+        label.setText("加载中…");
+        label.setTextColor(0xFFFFFFFF);
+        label.setTextSize(13f);
+        label.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        labelLp.topMargin = dp(12);
+        labelLp.gravity = Gravity.CENTER_HORIZONTAL;
+        box.addView(label, labelLp);
+
+        FrameLayout.LayoutParams boxLp = new FrameLayout.LayoutParams(
+                dp(140), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER);
+        overlay.addView(box, boxLp);
+
+        overlay.setVisibility(View.GONE);
+        loadingOverlay = overlay;
+        return overlay;
+    }
+
+    private void showLoading(boolean show) {
+        if (loadingOverlay == null) return;
+        loadingOverlay.setVisibility(show ? View.VISIBLE : View.GONE);
+    }
+
     // ---------- 顶栏 ----------
 
-    private View buildHeader() {
-        LinearLayout row = new LinearLayout(this);
+    private View buildHeader() {        LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
 
@@ -997,6 +1058,7 @@ public class MainActivity extends android.app.Activity {
 
     private void runAsync(Task task) {
         showStatus("执行中...", false);
+        showLoading(true);
         new Thread(() -> {
             String message;
             boolean error = false;
@@ -1009,6 +1071,7 @@ public class MainActivity extends android.app.Activity {
             String finalMsg = message;
             boolean finalErr = error;
             runOnUiThread(() -> {
+                showLoading(false);
                 showStatus(finalMsg == null ? "" : finalMsg, finalErr);
                 refreshTodayCard();
             });
@@ -1026,6 +1089,7 @@ public class MainActivity extends android.app.Activity {
             return;
         }
         showStatus("执行中...", false);
+        showLoading(true);
         new Thread(() -> {
             String message;
             boolean error = false;
@@ -1040,6 +1104,7 @@ public class MainActivity extends android.app.Activity {
             String finalMsg = message;
             boolean finalErr = error;
             runOnUiThread(() -> {
+                showLoading(false);
                 showStatus(finalMsg == null ? "" : finalMsg, finalErr);
                 refreshTodayCard();
             });
