@@ -69,7 +69,7 @@ bilibili-usage-tracker/
 │   │   └── options.js / options.html # 设置页：D1 配置、连接测试、上传日志
 │   └── manifest.json
 │
-├── bilibili-usage-android/         # Android App（v1.3.9，纯 Java，无第三方依赖）
+├── bilibili-usage-android/         # Android App（v1.4.0，纯 Java，无第三方依赖）
 │   └── app/src/main/java/com/example/biliusage/
 │       ├── MainActivity.java       # 主界面（全部纯代码构建 UI）
 │       ├── UsageCollector.java     # UsageStatsManager 封装
@@ -82,6 +82,10 @@ bilibili-usage-tracker/
 ├── worker/                         # 可选 Cloudflare Worker 后端中转
 │   ├── src/index.js
 │   └── schema.sql                  # D1 建表 SQL（必须执行一次）
+│
+├── output/                         # 发布产物（APK + 插件 zip，受 git 追踪）
+│   ├── bilibili-usage-tracker-v*.apk
+│   └── bilibili-usage-tracker-extension-v*.zip
 │
 └── docs/                           # 截图与文档资源
 ```
@@ -173,7 +177,7 @@ cd bilibili-usage-android
 | 平台 | 版本 |
 |------|------|
 | Chrome 插件 | v1.3.3 |
-| Android App | v1.3.9 (versionCode 19) |
+| Android App | v1.4.0 (versionCode 20) |
 | HarmonyOS | 实验性，暂不可用 |
 
 ---
