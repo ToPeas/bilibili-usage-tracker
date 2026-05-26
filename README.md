@@ -6,6 +6,27 @@
 
 ---
 
+## 截图
+
+<table>
+  <tr>
+    <td align="center">
+      <b>Android · Hero + 趋势图</b><br/>
+      <img src="docs/screenshot-extension.png" width="480" alt="Android 平板完整界面"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <b>Android · 趋势图 + 24h 分布 + 设备拆分</b><br/>
+      <img src="docs/screenshot-android-chart.png" width="260" alt="Android 趋势图"/>
+      &nbsp;&nbsp;
+      <img src="docs/screenshot-android-device.png" width="260" alt="Android 设备拆分"/>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## ✨ 功能
 
 | | Chrome / Edge 插件 | Android App |
