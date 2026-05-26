@@ -42,10 +42,13 @@ bilibili-usage-harmony/.ohpmrc
 # ========================
 # Chrome Extension build
 # ========================
-# Packed CRX / ZIP (generated, not source)
+# Packed CRX / ZIP (generated, not source) — 根目录散落的打包文件
 *.crx
-*.zip
 bilibili-usage-extension.zip
+
+# ========================
+# output/ — 发布产物目录，被 git 追踪，不在此排除
+# ========================
 
 # ========================
 # Cloudflare Worker / Node
