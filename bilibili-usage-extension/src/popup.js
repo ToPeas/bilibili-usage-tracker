@@ -59,7 +59,9 @@ const state = {
   range: 7,
   days: [],          // [{date,totalMs,latestUploadedAt,devices:[{deviceId,deviceAlias,totalMs,uploadedAt}]}]
   selectedDate: "",
-  selectedDetail: null
+  selectedDetail: null,
+  trendToken: 0,
+  detailToken: 0
 };
 
 /** ---------- entry ---------- */
@@ -180,8 +182,20 @@ function renderDebug(status) {
 
 /** ---------- trend (range days) ---------- */
 async function refreshTrend() {
+  const token = ++state.trendToken;
+  const days = state.range;
+  const cached = await readDashboardCache(buildRecentCacheKey(days));
+  if (token !== state.trendToken || days !== state.range) return;
+  if (cached?.ok) {
+    applyTrendResponse(cached);
+  }
   const response = await sendMessage({ type: "get-recent-usage", days: state.range });
+  if (token !== state.trendToken || days !== state.range) return;
   if (!response) return;
+  applyTrendResponse(response);
+}
+
+function applyTrendResponse(response) {
   dbChip.textContent = `D1：${response.database || "未配置"}`;
   if (!response.ok) {
     state.days = [];
@@ -207,7 +221,7 @@ async function refreshTrend() {
     state.selectedDate = todayRow?.date || todayKey;
   }
   drawTrend();
-  await refreshDayDetail();
+  refreshDayDetail().catch(() => {});
 }
 
 /** ---------- day detail ---------- */
@@ -218,13 +232,25 @@ async function refreshDayDetail() {
     deviceList.innerHTML = "";
     return;
   }
+  const token = ++state.detailToken;
+  const selectedDate = state.selectedDate;
+  const cached = await readDashboardCache(buildDayDetailCacheKey(selectedDate));
+  if (token !== state.detailToken || selectedDate !== state.selectedDate) return;
+  if (cached?.ok) {
+    applyDayDetailResponse(cached);
+  }
   const resp = await sendMessage({ type: "get-day-detail", date: state.selectedDate });
+  if (token !== state.detailToken || selectedDate !== state.selectedDate) return;
   if (!resp || !resp.ok) {
     dayTitle.textContent = state.selectedDate;
     daySub.textContent = resp?.error || "查询失败";
     deviceList.innerHTML = "";
     return;
   }
+  applyDayDetailResponse(resp);
+}
+
+function applyDayDetailResponse(resp) {
   state.selectedDetail = resp;
   dayTitle.textContent = `${resp.date} · ${formatDuration(resp.totalMs)}`;
   daySub.textContent = resp.devices.length
@@ -232,6 +258,28 @@ async function refreshDayDetail() {
     : "这一天暂无设备上报";
   drawHourChart(resp.hours || [], resp.hoursByDevice || {}, resp.devices || []);
   renderDeviceList(resp.devices || [], resp.hoursByDevice || {});
+}
+
+async function readDashboardCache(keyPromise) {
+  const key = await keyPromise;
+  if (!key) return null;
+  const { usageDashboardCache = {} } = await chrome.storage.local.get("usageDashboardCache");
+  return usageDashboardCache[key] || null;
+}
+
+async function buildRecentCacheKey(rangeDays) {
+  const { settings = {} } = await chrome.storage.local.get("settings");
+  const days = Math.max(1, Math.min(366, Math.floor(rangeDays) || 7));
+  const to = formatDateInTimeZoneJs(new Date());
+  const fromDate = new Date();
+  fromDate.setDate(fromDate.getDate() - (days - 1));
+  const from = formatDateInTimeZoneJs(fromDate);
+  return `recent:${settings.accountId || ""}|${settings.databaseId || ""}:${days}:${from}:${to}`;
+}
+
+async function buildDayDetailCacheKey(date) {
+  const { settings = {} } = await chrome.storage.local.get("settings");
+  return `detail:${settings.accountId || ""}|${settings.databaseId || ""}:${date || ""}`;
 }
 
 // （24h 柱图改为纯 DOM，canvas 缓存变量已移除）
@@ -266,27 +314,39 @@ function drawHourChart(hours, hoursByDevice, devices) {
              data: normalizeHours(info.hours || []), color };
   });
 
-  // Y 轴固定最大值 = 1 小时，超出时撑开
+  // Y 轴按每小时堆叠总量撑开，避免同一小时多设备叠加后超出图表。
   let rawMax = 0;
-  for (const s of series) for (const pt of s.data) rawMax = Math.max(rawMax, pt.durationMs || 0);
-  if (rawMax <= 0) { hourBars.innerHTML = `<div style="padding:16px;color:${INK_MUTE};font-size:12px;text-align:center">该天暂无时段数据</div>`; return; }
+  for (let h = 0; h < 24; h++) {
+    let sum = 0;
+    for (const s of series) sum += s.data[h]?.durationMs || 0;
+    rawMax = Math.max(rawMax, sum);
+  }
+  if (rawMax <= 0) {
+    hourBars.innerHTML = `<div style="padding:16px;color:${INK_MUTE};font-size:12px;text-align:center">该天暂无时段数据</div>`;
+    return;
+  }
   const yMax = Math.max(3_600_000, rawMax);
 
-  // 清除旧图例
+  // 清除旧图例。颜色直接由下方设备列表说明。
   hourChartWrap.querySelectorAll(".hour-legend").forEach(el => el.remove());
-
-  // 图例
-  const legendEl = document.createElement("div");
-  legendEl.className = "hour-legend";
-  for (const s of series) {
-    const item = document.createElement("div");
-    item.className = "hour-legend-item";
-    item.innerHTML = `<span class="hour-legend-dot" style="background:${s.color.line}"></span><span>${escapeHtml(s.srcLabel)}·${escapeHtml(s.label)}</span>`;
-    legendEl.appendChild(item);
-  }
-  hourChartWrap.insertBefore(legendEl, hourBars);
+  hourChartWrap.querySelectorAll(".hour-chart-grid").forEach(el => el.remove());
 
   const BAR_H = 100; // 与 CSS .hour-col height: 100px 一致
+
+  const grid = document.createElement("div");
+  grid.className = "hour-chart-grid";
+  const yAxis = document.createElement("div");
+  yAxis.className = "hour-y-axis";
+  for (let i = 4; i >= 0; i--) {
+    const label = document.createElement("span");
+    label.className = "hour-y-label";
+    label.style.bottom = `${(i / 4) * BAR_H}px`;
+    label.textContent = axisLabelCompact((yMax * i) / 4);
+    yAxis.appendChild(label);
+  }
+  grid.appendChild(yAxis);
+  grid.appendChild(hourBars);
+  hourChartWrap.appendChild(grid);
 
   // 单例 tooltip div 挂在 hourBars 上，不在每个列里，避免被裁切
   const tip = document.createElement("div");
@@ -310,7 +370,7 @@ function drawHourChart(hours, hoursByDevice, devices) {
       const px = Math.max(1, Math.round((ms / yMax) * BAR_H));
       const seg = document.createElement("div");
       seg.className = "hour-seg";
-      seg.style.cssText = `height:${px}px;background:${s.color.line};opacity:0.85;`;
+      seg.style.cssText = `height:${px}px;background:${s.color.line};opacity:0.85;border-radius:0;`;
       inner.appendChild(seg);
     }
     col.appendChild(inner);
@@ -486,7 +546,7 @@ function drawTrend(_unused, errorMsg) {
     return;
   }
 
-  const padding = { top: 28, right: 14, bottom: 26, left: 34 };
+  const padding = { top: 28, right: 0, bottom: 26, left: 28 };
   const innerW = w - padding.left - padding.right;
   const innerH = h - padding.top - padding.bottom;
   // 从旧到新从左到右
@@ -508,7 +568,7 @@ function drawTrend(_unused, errorMsg) {
     ctx.lineTo(padding.left + innerW, y);
     ctx.stroke();
     const value = niceMax * (1 - i / 4);
-    ctx.fillText(axisLabelMs(value), padding.left - 6, y);
+    ctx.fillText(axisLabelCompact(value), padding.left - 6, y);
   }
 
   const n = sorted.length;
@@ -640,26 +700,26 @@ function niceCeilMs(ms) {
   return Math.ceil(ms / 3600_000) * 3600_000;
 }
 
-/** Y 轴紧凑标签（0 / 30秒 / 2.5分 / 5分 / 1小时 / 1小时30分 / …） */
-function axisLabelMs(ms) {
+/** Y 轴紧凑标签（0 / 30s / 5m / 1h / 1h30m / …） */
+function axisLabelCompact(ms) {
   if (ms <= 0) return "0";
-  if (ms < 1000) return Math.round(ms) + "毫秒";
+  if (ms < 1000) return Math.round(ms) + "ms";
   if (ms < 60_000) {
     const s = ms / 1000;
-    if (Number.isInteger(s)) return s + "秒";
-    return s.toFixed(1) + "秒";
+    if (Number.isInteger(s)) return s + "s";
+    return s.toFixed(1) + "s";
   }
   if (ms < 60 * 60_000) {
     const m = ms / 60_000;
-    if (Number.isInteger(m)) return m + "分";
-    return m.toFixed(1) + "分";
+    if (Number.isInteger(m)) return m + "m";
+    return m.toFixed(1) + "m";
   }
   const totalMin = ms / 60_000;
   const hh = Math.floor(totalMin / 60);
   const rem = totalMin % 60;
-  if (rem === 0) return hh + "小时";
-  if (Number.isInteger(rem)) return hh + "小时" + rem + "分";
-  return hh + "小时" + rem.toFixed(1) + "分";
+  if (rem === 0) return hh + "h";
+  if (Number.isInteger(rem)) return hh + "h" + rem + "m";
+  return hh + "h" + rem.toFixed(1) + "m";
 }
 
 trendCanvas.addEventListener("click", event => {

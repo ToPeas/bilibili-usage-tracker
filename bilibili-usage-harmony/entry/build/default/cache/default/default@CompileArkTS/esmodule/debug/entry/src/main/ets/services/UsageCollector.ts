@@ -24,17 +24,11 @@ export class UsageCollector {
         return false;
     }
     static unsupportedReason(): string {
-        return '当前使用 OpenHarmony SDK 20，系统没有向三方应用开放读取其它 App 使用时长的 API。';
+        return '当前版本先恢复可安装状态。系统使用时长权限接入需要单独验证 HarmonyOS profile。';
     }
-    /**
-     * 当前项目使用的是 OpenHarmony SDK 20。这个 SDK 不提供 HarmonyOS 的
-     * resourceschedule.usageStatistics 应用使用记录 API，所以这里先返回空桶，
-     * 保持项目可编译、D1 设置和查询 UI 可用。
-     */
     static async queryDayBuckets(_startMs: number, _endMs: number): Promise<DayBuckets> {
         return new DayBuckets();
     }
-    /** 收集最近 N 天的逐日统计（含今日）。 */
     static async collectRecent(days: number): Promise<DayPayload[]> {
         const out: DayPayload[] = [];
         const today = new Date();
@@ -43,6 +37,30 @@ export class UsageCollector {
             const dayStart = new Date(today.getTime() - i * 24 * 3600 * 1000);
             const dayEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000);
             const buckets = await UsageCollector.queryDayBuckets(dayStart.getTime(), dayEnd.getTime());
+            const payload = new DayPayload();
+            payload.date = UsageCollector.fmtDate(dayStart);
+            payload.startMs = dayStart.getTime();
+            payload.endMs = dayEnd.getTime();
+            payload.totalMs = buckets.totalMs;
+            payload.byBundle = UsageCollector.bundleItemsFromMap(buckets.byBundle);
+            payload.byHour = buckets.byHour;
+            out.push(payload);
+        }
+        return out;
+    }
+    static async collectRecentForUpload(days: number, includeToday: boolean): Promise<DayPayload[]> {
+        const out: DayPayload[] = [];
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const totalDays = Math.max(1, days);
+        const startOffset = includeToday ? 0 : 1;
+        for (let i = startOffset; i < startOffset + totalDays; i++) {
+            const dayStart = new Date(today.getTime() - i * 24 * 3600 * 1000);
+            const dayEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000);
+            const buckets = await UsageCollector.queryDayBuckets(dayStart.getTime(), dayEnd.getTime());
+            if (buckets.totalMs <= 0) {
+                continue;
+            }
             const payload = new DayPayload();
             payload.date = UsageCollector.fmtDate(dayStart);
             payload.startMs = dayStart.getTime();
@@ -63,7 +81,9 @@ export class UsageCollector {
     private static bundleItemsFromMap(source: Map<string, number>): BundleItem[] {
         const result: BundleItem[] = [];
         source.forEach((durationMs: number, bundle: string) => {
-            result.push(new BundleItem(bundle, durationMs));
+            if (durationMs > 0) {
+                result.push(new BundleItem(bundle, durationMs));
+            }
         });
         return result;
     }

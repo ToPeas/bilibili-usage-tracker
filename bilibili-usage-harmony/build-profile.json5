@@ -7,11 +7,11 @@
         "material": {
           "certpath": "/Users/peiqixin/.ohos/config/default_bilibili-usage-harmony_SuPlPH0Iar2i9kVsAbfWaHZUuy5NjDOpMg724WQNx24=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001BCC4166CB05B3EF0E776BF11BE7D1D05A16D5628D3B67AA96B6CE10F3C77C85AB9F647BA0720E80",
+          "keyPassword": "0000001B232424A694790A133CDED7F667394B2E16F3A1E9734029201D892595E234450DC7B4CB5239B03D",
           "profile": "/Users/peiqixin/.ohos/config/default_bilibili-usage-harmony_SuPlPH0Iar2i9kVsAbfWaHZUuy5NjDOpMg724WQNx24=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "/Users/peiqixin/.ohos/config/default_bilibili-usage-harmony_SuPlPH0Iar2i9kVsAbfWaHZUuy5NjDOpMg724WQNx24=.p12",
-          "storePassword": "0000001BBCCA7A321A2296FFDADD725CF710290170AC051191B9F8DE3516A330F9E0CC6884BA5DEC5EFDC5"
+          "storePassword": "0000001BCD683A70905E0B3CA0256F818B987D90F49B79D5BD94273BABE0B380AFFCAA0268E3D887E3BC72"
         }
       }
     ],
@@ -19,10 +19,10 @@
       {
         "name": "default",
         "signingConfig": "default",
-        "compileSdkVersion": 20,
-        "compatibleSdkVersion": 20,
-        "targetSdkVersion": 20,
-        "runtimeOS": "OpenHarmony"
+        "compileSdkVersion": "6.1.0(23)",
+        "compatibleSdkVersion": "6.1.0(23)",
+        "targetSdkVersion": "6.1.0(23)",
+        "runtimeOS": "HarmonyOS"
       }
     ],
     "buildModeSet": [

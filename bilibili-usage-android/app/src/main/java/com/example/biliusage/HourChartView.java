@@ -56,7 +56,6 @@ public final class HourChartView extends View {
     private final Paint gridPaint      = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint xLabelPaint    = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint yLabelPaint    = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint legendPaint    = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint emptyPaint     = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint tooltipBgP     = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint tooltipBorderP = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -90,9 +89,6 @@ public final class HourChartView extends View {
         yLabelPaint.setColor(TEXT_SECONDARY);
         yLabelPaint.setTextSize(9.5f * density);
         yLabelPaint.setTextAlign(Paint.Align.RIGHT);
-
-        legendPaint.setTextSize(9f * density);
-        legendPaint.setTextAlign(Paint.Align.LEFT);
 
         emptyPaint.setColor(TEXT_SECONDARY);
         emptyPaint.setTextAlign(Paint.Align.CENTER);
@@ -161,11 +157,11 @@ public final class HourChartView extends View {
         float w = getWidth();
         float h = getHeight();
 
-        float padTop    = 22f * density;  // 图例区
+        float padTop    = 8f * density;
         float padBot    = 22f * density;  // X 轴标签
-        float padRight  = 8f  * density;
-        float yAxisW    = 36f * density;
-        float chartLeft  = yAxisW + 4f * density;
+        float padRight  = 0f;
+        float yAxisW    = 18f * density;
+        float chartLeft  = yAxisW;
         float chartRight = w - padRight;
         float chartTop   = padTop;
         float chartBot   = h - padBot;
@@ -186,13 +182,19 @@ public final class HourChartView extends View {
             return;
         }
 
-        // Y 轴最大值：固定 1 小时，超过则撑开
-        long yMax = Math.max(ONE_HOUR_MS, rawMax);
+        // Y 轴最大值按每小时堆叠总量计算，避免多设备同小时叠加后冲出图表。
+        long maxStack = 0L;
+        for (int hr = 0; hr < 24; hr++) {
+            long sum = 0L;
+            for (DeviceSeries s : seriesList) sum += s.hours[hr];
+            maxStack = Math.max(maxStack, sum);
+        }
+        long yMax = Math.max(ONE_HOUR_MS, maxStack);
 
         // 列宽 & 间隙
         int n = 24;
         float colStep = chartW / n;       // 每列宽度（含间隙）
-        float barW    = colStep * 0.72f;  // 实际柱宽
+        float barW    = Math.max(4f * density, colStep * 0.72f);  // 实际柱宽
         float gap     = (colStep - barW) / 2f;
         cColStep = colStep;
 
@@ -228,17 +230,15 @@ public final class HourChartView extends View {
                 long ms = s.hours[hr];
                 if (ms <= 0L) continue;
                 float ratio = (float) ((double) ms / (double) yMax);
-                float segH  = chartH * ratio;
+                float segH  = Math.max(2f * density, chartH * ratio);
                 float segTop = stackBot - segH;
 
                 int cIdx = s.colorIndex % LINE_COLORS.length;
                 barPaint.setColor(LINE_COLORS[cIdx]);
-                barPaint.setAlpha(hr == hoveredHour ? 220 : 180);
+                barPaint.setAlpha(hr == hoveredHour ? 245 : 220);
 
                 tmpRect.set(barLeft, segTop, barRight, stackBot);
-                // 最上层圆角，堆叠中间层直角
-                float radius = (stackBot >= chartBot) ? 3f * density : 0f;
-                canvas.drawRoundRect(tmpRect, radius, radius, barPaint);
+                canvas.drawRect(tmpRect, barPaint);
                 stackBot = segTop;
             }
         }
@@ -248,25 +248,6 @@ public final class HourChartView extends View {
         for (int i : lbIdx) {
             float cx = chartLeft + colStep * i + colStep / 2f;
             canvas.drawText(i + "", cx, h - 4f * density, xLabelPaint);
-        }
-
-        // ── 图例（顶部，从左向右）──
-        float lx = chartLeft;
-        float legendY = padTop / 2f;
-        for (DeviceSeries s : seriesList) {
-            int cIdx = s.colorIndex % LINE_COLORS.length;
-            String lbl = sourceLabel(s.source) + (s.label.isEmpty() ? "" : "·" + s.label);
-            // 色块
-            Paint bp = new Paint(Paint.ANTI_ALIAS_FLAG);
-            bp.setColor(LINE_COLORS[cIdx]);
-            bp.setStyle(Paint.Style.FILL);
-            tmpRect.set(lx, legendY, lx + 10f * density, legendY + 6f * density);
-            canvas.drawRoundRect(tmpRect, 2f, 2f, bp);
-            lx += 13f * density;
-            // 文字
-            legendPaint.setColor(LINE_COLORS[cIdx]);
-            canvas.drawText(lbl, lx, legendY + legendPaint.getTextSize() * 0.85f, legendPaint);
-            lx += legendPaint.measureText(lbl) + 10f * density;
         }
 
         // ── Tooltip ──

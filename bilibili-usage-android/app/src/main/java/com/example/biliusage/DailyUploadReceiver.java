@@ -41,12 +41,16 @@ public class DailyUploadReceiver extends BroadcastReceiver {
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
+        // 计算下一个 05:00:00 的时间点
         Calendar next = Calendar.getInstance();
-        next.add(Calendar.DAY_OF_MONTH, 1);
-        next.set(Calendar.HOUR_OF_DAY, 0);
-        next.set(Calendar.MINUTE, 5);
+        next.set(Calendar.HOUR_OF_DAY, 5);
+        next.set(Calendar.MINUTE, 0);
         next.set(Calendar.SECOND, 0);
         next.set(Calendar.MILLISECOND, 0);
+        // 如果今天 05:00 已经过了，推到明天
+        if (next.getTimeInMillis() <= System.currentTimeMillis()) {
+            next.add(Calendar.DAY_OF_MONTH, 1);
+        }
         alarmManager.setInexactRepeating(
                 AlarmManager.RTC_WAKEUP,
                 next.getTimeInMillis(),

@@ -4,7 +4,7 @@
     "type": "entry",
     "description": "$string:module_desc",
     "mainElement": "EntryAbility",
-    "deviceTypes": ["default"],
+    "deviceTypes": ["phone"],
     "deliveryWithInstall": true,
     "installationFree": false,
     "pages": "$profile:main_pages",
@@ -26,15 +26,16 @@
         ]
       }
     ],
-    "requestPermissions": [
+    "extensionAbilities": [
       {
-        "name": "ohos.permission.BUNDLE_ACTIVE_INFO",
-        "reason": "$string:perm_bundle_active_reason",
-        "usedScene": {
-          "abilities": ["EntryAbility"],
-          "when": "always"
-        }
-      },
+        "name": "UploadWorkerAbility",
+        "srcEntry": "./ets/workability/UploadWorkerAbility.ets",
+        "label": "$string:EntryAbility_label",
+        "description": "$string:upload_worker_desc",
+        "type": "workScheduler"
+      }
+    ],
+    "requestPermissions": [
       {
         "name": "ohos.permission.INTERNET",
         "reason": "$string:perm_internet_reason"

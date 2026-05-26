@@ -39,6 +39,8 @@ class D1Row {
   deviceId: string = '';
   totalMs: number = 0;
   uploadedAt: string = '';
+  hour?: number;
+  durationMs?: number;
 }
 
 class D1QueryResult {
@@ -189,11 +191,58 @@ export class D1Client {
     }
   }
 
+  async queryRecentWithHours(days: number): Promise<DayRow[]> {
+    const rows = await this.queryRecent(days);
+    if (rows.length === 0) {
+      return rows;
+    }
+
+    const today = new Date();
+    const from = new Date(today.getTime() - (days - 1) * 24 * 3600 * 1000);
+    const request = new D1QueryRequest(
+      "SELECT date, source, device_id AS deviceId, hour, duration_ms AS durationMs FROM usage_hours WHERE date >= ? AND date <= ? ORDER BY date DESC, source, device_id, hour",
+      [D1Client.fmtDate(from), D1Client.fmtDate(today)]
+    );
+    const r = await this.send(request);
+    if (!r.ok) {
+      return rows;
+    }
+
+    const byKey = new Map<string, DayRow>();
+    for (const row of rows) {
+      row.byHour = new Array<number>(24).fill(0);
+      byKey.set(D1Client.rowKey(row.date, row.source, row.deviceId), row);
+    }
+
+    try {
+      const j = JSON.parse(r.body) as D1ResponseEnvelope;
+      if (j.result && j.result.length > 0) {
+        const resultsField = j.result[0].results;
+        if (resultsField) {
+          for (const row of resultsField) {
+            const found = byKey.get(D1Client.rowKey(String(row.date || ''), String(row.source || ''), String(row.deviceId || '')));
+            const hour = Number(row.hour);
+            if (found && hour >= 0 && hour < 24) {
+              found.byHour[hour] = Number(row.durationMs || 0);
+            }
+          }
+        }
+      }
+    } catch (_e) {
+      return rows;
+    }
+    return rows;
+  }
+
   private static fmtDate(d: Date): string {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${dd}`;
+  }
+
+  private static rowKey(date: string, source: string, deviceId: string): string {
+    return `${date}|${source}|${deviceId}`;
   }
 }
 
@@ -204,4 +253,5 @@ export class DayRow {
   deviceId: string = '';
   totalMs: number = 0;
   uploadedAt: string = '';
+  byHour: number[] = new Array<number>(24).fill(0);
 }

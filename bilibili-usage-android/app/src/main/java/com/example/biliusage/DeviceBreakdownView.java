@@ -23,8 +23,6 @@ public final class DeviceBreakdownView extends View {
     private final Paint nameP = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint timeP = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint metaP = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint barBgP = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint barP = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint emptyP = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint dotP = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint dividerP = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -34,26 +32,21 @@ public final class DeviceBreakdownView extends View {
 
     private String title = "";
     private List<UsageChartView.DeviceUsage> devices = new ArrayList<>();
-    private long maxTotal = 0L;
-
     public DeviceBreakdownView(Context context) {
         super(context);
         density = getResources().getDisplayMetrics().density;
 
         nameP.setColor(TEXT_PRIMARY);
-        nameP.setTextSize(13f * density);
+        nameP.setTextSize(16f * density);
         nameP.setFakeBoldText(true);
 
         timeP.setColor(TEXT_PRIMARY);
-        timeP.setTextSize(13f * density);
+        timeP.setTextSize(16f * density);
         timeP.setTextAlign(Paint.Align.RIGHT);
         timeP.setFakeBoldText(true);
 
         metaP.setColor(TEXT_MUTED);
-        metaP.setTextSize(11f * density);
-
-        barBgP.setColor(PINK_SOFT);
-        barP.setColor(PINK);
+        metaP.setTextSize(13f * density);
 
         emptyP.setColor(TEXT_SECONDARY);
         emptyP.setTextSize(13f * density);
@@ -68,9 +61,6 @@ public final class DeviceBreakdownView extends View {
     public void setData(String title, List<UsageChartView.DeviceUsage> devices) {
         this.title = title == null ? "" : title;
         this.devices = devices == null ? new ArrayList<>() : new ArrayList<>(devices);
-        long max = 0L;
-        for (UsageChartView.DeviceUsage d : this.devices) max = Math.max(max, d.totalMs);
-        this.maxTotal = max;
         requestLayout();
         // 双保险：让父链也 requestLayout，避免 LinearLayout 不重新 measure 导致高度错
         if (getParent() instanceof View) ((View) getParent()).requestLayout();
@@ -81,8 +71,8 @@ public final class DeviceBreakdownView extends View {
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = MeasureSpec.getSize(widthMeasureSpec);
         int rows = Math.max(devices.size(), 1);
-        int rowH = Math.round(72f * density); // 每行需容纳：名称(18) + 进度条(8) + meta(14) + 间隔，以前 56 太压
-        int contentH = rowH * rows + Math.round(16f * density);
+        int rowH = Math.round(60f * density);
+        int contentH = rowH * rows + Math.round(10f * density);
         if (devices.isEmpty()) {
             contentH = Math.round(80f * density);
         }
@@ -104,22 +94,18 @@ public final class DeviceBreakdownView extends View {
 
         float left = 4f * density;
         float right = width - 4f * density;
-        float rowH = 72f * density;
+        float rowH = 60f * density;
 
         for (int i = 0; i < devices.size(); i++) {
             UsageChartView.DeviceUsage d = devices.get(i);
-            float top = i * rowH + 4f * density;
+            float top = i * rowH + 6f * density;
 
             // 设备颜色
             int color = (d.colorIndex >= 0 && d.colorIndex < DEVICE_LINE_COLORS.length)
                     ? DEVICE_LINE_COLORS[d.colorIndex] : DEVICE_LINE_COLORS[i % DEVICE_LINE_COLORS.length];
             dotP.setColor(color);
-            barP.setColor(color);
-            int fillAlpha = 0x33;
-            int fillColor = (color & 0x00FFFFFF) | (fillAlpha << 24);
-            barBgP.setColor(fillColor);
 
-            float dotR = 4f * density;
+            float dotR = 5f * density;
             float dotCx = left + dotR;
             float dotCy = top + 14f * density;
             canvas.drawCircle(dotCx, dotCy, dotR, dotP);
@@ -132,20 +118,8 @@ public final class DeviceBreakdownView extends View {
             canvas.drawText(nameText, nameX, top + 18f * density, nameP);
             canvas.drawText(timeText, right, top + 18f * density, timeP);
 
-            float barTop = top + 30f * density;
-            float barBot = barTop + 8f * density;
-            tmpRect.set(left, barTop, right, barBot);
-            canvas.drawRoundRect(tmpRect, 4f * density, 4f * density, barBgP);
-
-            float ratio = maxTotal > 0L ? (float) ((double) d.totalMs / (double) maxTotal) : 0f;
-            float fillRight = left + (right - left) * Math.max(ratio, d.totalMs > 0 ? 0.03f : 0f);
-            if (fillRight > left) {
-                tmpRect.set(left, barTop, fillRight, barBot);
-                canvas.drawRoundRect(tmpRect, 4f * density, 4f * density, barP);
-            }
-
             String meta = d.uploadedAt.isEmpty() ? "尚未记录上传时间" : ("上传 " + d.uploadedAt);
-            canvas.drawText(meta, left, barBot + 18f * density, metaP);
+            canvas.drawText(meta, nameX, top + 44f * density, metaP);
 
             if (i < devices.size() - 1) {
                 float dy = top + rowH - 1f;

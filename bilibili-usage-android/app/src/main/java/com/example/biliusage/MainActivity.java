@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.TimeZone;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class MainActivity extends android.app.Activity {
 
@@ -71,6 +72,13 @@ public class MainActivity extends android.app.Activity {
     private List<UsageChartView.DayBucket> currentDays = new ArrayList<>();
     /** 用户当前选中的日期（yyyy-MM-dd），用于刷新后恢复选中，避免跳动 */
     private String selectedDay = null;
+    private int chartLoadToken = 0;
+    private int hourLoadToken = 0;
+    /**
+     * 上传互斥锁：防止「进入 app 自动上传」和「手动点按钮上传」同时执行，
+     * 导致并发访问 D1 API 时出现冲突或错误。
+     */
+    private final AtomicBoolean uploadingNow = new AtomicBoolean(false);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -92,8 +100,6 @@ public class MainActivity extends android.app.Activity {
         root.addView(buildHeroCard());
         root.addView(spacer(14));
         root.addView(buildChartCard());
-        root.addView(spacer(14));
-        root.addView(buildHourCard());
         root.addView(spacer(14));
         root.addView(buildDeviceCard());
         root.addView(spacer(14));
@@ -125,11 +131,15 @@ public class MainActivity extends android.app.Activity {
         SettingsStore settings = SettingsStore.load(this);
         if (!settings.isCloudConfigured()) return;
         if (!UsageCollector.hasUsageAccess(this)) return;
+        // 如果已有上传任务在跑（例如用户刚点了按钮），跳过自动上传，避免并发冲突
+        if (!uploadingNow.compareAndSet(false, true)) return;
         new Thread(() -> {
             try {
                 DailyUploadReceiver.upload(this, true, 1);
             } catch (Exception ignore) {
-                return; // 失败不报武错，避免干扰用户
+                // 失败不报错，避免干扰用户
+            } finally {
+                uploadingNow.set(false);
             }
             // 上传完重拉 D1（不用 runAsync，避免覆盖其它状态提示）
             try {
@@ -374,10 +384,7 @@ public class MainActivity extends android.app.Activity {
             if (currentRangeDays == days) return;
             currentRangeDays = days;
             updateRangeTabsUi();
-            runAsync(() -> {
-                loadRecentChart();
-                return "已切换到" + text;
-            });
+            loadRecentChartQuietly();
         });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
@@ -423,29 +430,7 @@ public class MainActivity extends android.app.Activity {
         return "最近 " + days + " 天";
     }
 
-    // ---------- 24 小时分布卡 ----------
-
-    private View buildHourCard() {
-        LinearLayout card = card();
-        card.addView(sectionTitle("选中某天·24 小时分布"));
-        hourCardSubtitle = new TextView(this);
-        hourCardSubtitle.setText("看看你在哪个时段用 B 站最多");
-        hourCardSubtitle.setTextColor(COLOR_TEXT_SECONDARY);
-        hourCardSubtitle.setTextSize(12f);
-        LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        subLp.topMargin = dp(4);
-        subLp.bottomMargin = dp(8);
-        card.addView(hourCardSubtitle, subLp);
-
-        hourChart = new HourChartView(this);
-        LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dp(140));
-        card.addView(hourChart, hLp);
-        return card;
-    }
-
-    // ---------- 设备明细卡 ----------
+    // ---------- 选中日期详情卡 ----------
 
     private View buildDeviceCard() {
         LinearLayout card = card();
@@ -462,9 +447,9 @@ public class MainActivity extends android.app.Activity {
         row.addView(left, leftLp);
 
         selectedDayTitle = new TextView(this);
-        selectedDayTitle.setText("按设备拆分");
+        selectedDayTitle.setText("选中日期");
         selectedDayTitle.setTextColor(COLOR_TEXT_PRIMARY);
-        selectedDayTitle.setTextSize(15f);
+        selectedDayTitle.setTextSize(20f);
         selectedDayTitle.setTypeface(null, Typeface.BOLD);
         left.addView(selectedDayTitle);
 
@@ -477,10 +462,21 @@ public class MainActivity extends android.app.Activity {
         metaLp.topMargin = dp(2);
         left.addView(selectedDayMeta, metaLp);
 
+        hourChart = new HourChartView(this);
+        LinearLayout.LayoutParams hLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(188));
+        hLp.topMargin = dp(12);
+        card.addView(hourChart, hLp);
+
+        hourCardSubtitle = new TextView(this);
+        hourCardSubtitle.setText("");
+        hourCardSubtitle.setTextColor(COLOR_TEXT_SECONDARY);
+        hourCardSubtitle.setTextSize(12f);
+
         deviceBreakdown = new DeviceBreakdownView(this);
         LinearLayout.LayoutParams bLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        bLp.topMargin = dp(12);
+        bLp.topMargin = dp(4);
         card.addView(deviceBreakdown, bLp);
 
         return card;
@@ -513,13 +509,23 @@ public class MainActivity extends android.app.Activity {
         card.addView(spacer(8));
 
         Button uploadBtn = primaryButton("上传当前范围（含今天）");
-        uploadBtn.setOnClickListener(v -> runAsync(() -> DailyUploadReceiver.upload(this, true, currentRangeDays)));
+        uploadBtn.setOnClickListener(v -> runAsyncUpload(() -> DailyUploadReceiver.upload(this, true, currentRangeDays)));
         card.addView(uploadBtn);
 
         card.addView(spacer(8));
 
+        Button sync7dBtn = primaryButton("同步最近 7 天");
+        sync7dBtn.setOnClickListener(v -> runAsyncUpload(() -> {
+            String result = DailyUploadReceiver.upload(this, true, 7);
+            loadRecentChart();
+            return result;
+        }));
+        card.addView(sync7dBtn);
+
+        card.addView(spacer(8));
+
         Button backfillBtn = secondaryButton("补传最近半年（后台）");
-        backfillBtn.setOnClickListener(v -> runAsync(() -> DailyUploadReceiver.upload(this, true, DailyUploadReceiver.BACKFILL_DAYS)));
+        backfillBtn.setOnClickListener(v -> runAsyncUpload(() -> DailyUploadReceiver.upload(this, true, DailyUploadReceiver.BACKFILL_DAYS)));
         card.addView(backfillBtn);
 
         card.addView(spacer(8));
@@ -723,8 +729,14 @@ public class MainActivity extends android.app.Activity {
 
     private void loadRecentChart() throws Exception {
         SettingsStore settings = SettingsStore.load(this);
+        final int token;
+        synchronized (this) {
+            chartLoadToken += 1;
+            token = chartLoadToken;
+        }
         if (!settings.isCloudConfigured()) {
             runOnUiThread(() -> {
+                if (token != chartLoadToken) return;
                 currentDays = new ArrayList<>();
                 chart.setDays(currentDays);
                 deviceBreakdown.setData("按设备拆分", Collections.emptyList());
@@ -742,8 +754,20 @@ public class MainActivity extends android.app.Activity {
         String from = formatDate(fromCal);
         String to = formatDate(toCal);
 
-        JSONArray rows = new D1Client(settings).queryRecentDays(from, to);
+        JSONArray cachedRows = UsageCache.getRecentRows(this, settings, from, to);
+        if (cachedRows != null) {
+            List<UsageChartView.DayBucket> cachedBuckets = buildBucketsFromRows(settings, cachedRows, days, fromCal, toCal);
+            applyBuckets(cachedBuckets, days, token);
+        }
 
+        JSONArray rows = new D1Client(settings).queryRecentDays(from, to);
+        UsageCache.putRecentRows(this, settings, from, to, rows);
+        List<UsageChartView.DayBucket> buckets = buildBucketsFromRows(settings, rows, days, fromCal, toCal);
+        applyBuckets(buckets, days, token);
+    }
+
+    private List<UsageChartView.DayBucket> buildBucketsFromRows(SettingsStore settings, JSONArray rows, int days,
+                                                                 Calendar fromCal, Calendar toCal) throws Exception {
         Map<String, List<UsageChartView.DeviceUsage>> devicesByDate = new LinkedHashMap<>();
         Map<String, Long> totalsByDate = new LinkedHashMap<>();
 
@@ -839,16 +863,21 @@ public class MainActivity extends android.app.Activity {
             // 本地兑底失败不影响 D1 趋势呈现
         }
 
-        currentDays = buckets;
         // 排序：旧 → 新（左 → 右），使「今天」永远在最右，符合直觉
-        currentDays.sort(new Comparator<UsageChartView.DayBucket>() {
+        buckets.sort(new Comparator<UsageChartView.DayBucket>() {
             @Override
             public int compare(UsageChartView.DayBucket a, UsageChartView.DayBucket b) {
                 return a.date.compareTo(b.date);
             }
         });
+        return buckets;
+    }
 
+    private void applyBuckets(List<UsageChartView.DayBucket> buckets, int days, int token) {
+        List<UsageChartView.DayBucket> snapshot = new ArrayList<>(buckets);
         runOnUiThread(() -> {
+            if (token != chartLoadToken || days != currentRangeDays) return;
+            currentDays = snapshot;
             chart.setDays(currentDays);
             updateRangeTabsUi();
             if (currentDays.isEmpty()) {
@@ -879,61 +908,79 @@ public class MainActivity extends android.app.Activity {
         if (bucket == null || hourChart == null) return;
         SettingsStore settings = SettingsStore.load(this);
         if (!settings.isCloudConfigured()) return;
+        final int token;
+        synchronized (this) {
+            hourLoadToken += 1;
+            token = hourLoadToken;
+        }
+        JSONArray cachedRows = UsageCache.getDayHours(this, settings, bucket.date);
+        if (cachedRows != null) {
+            renderHourRows(bucket, cachedRows, token);
+        }
         new Thread(() -> {
-            // device_id -> [source(String), alias(String), hours(long[24])]
-            java.util.LinkedHashMap<String, Object[]> deviceMap = new java.util.LinkedHashMap<>();
             try {
                 JSONArray rows = new D1Client(settings).queryDayHours(bucket.date);
-                if (rows != null) {
-                    for (int i = 0; i < rows.length(); i++) {
-                        JSONObject row = rows.getJSONObject(i);
-                        String deviceId = row.optString("deviceId", "");
-                        String source   = row.optString("source", "");
-                        String alias    = row.optString("deviceAlias", "");
-                        if (alias.isEmpty()) alias = deviceId.length() >= 8 ? deviceId.substring(0, 8) : deviceId;
-                        int hour = Math.max(0, Math.min(23, row.optInt("hour", 0)));
-                        long ms  = row.optLong("durationMs", 0L);
-                        if (!deviceMap.containsKey(deviceId)) {
-                            deviceMap.put(deviceId, new Object[]{source, alias, new long[24]});
-                        }
-                        ((long[]) deviceMap.get(deviceId)[2])[hour] += ms;
-                    }
-                }
+                UsageCache.putDayHours(this, settings, bucket.date, rows);
+                renderHourRows(bucket, rows, token);
             } catch (Exception ignore) { }
-
-            // 按设备序号分配颜色（每台设备独立一色，不再区分 source）
-            java.util.Map<String, Integer> deviceColor = new java.util.LinkedHashMap<>();
-            int deviceSeq = 0;
-            for (String devId : deviceMap.keySet()) {
-                deviceColor.put(devId, deviceSeq % HourChartView.LINE_COLORS.length);
-                deviceSeq++;
-            }
-
-            List<HourChartView.DeviceSeries> series = new ArrayList<>();
-            for (java.util.Map.Entry<String, Object[]> entry : deviceMap.entrySet()) {
-                Object[] val = entry.getValue();
-                int cIdx = deviceColor.getOrDefault(entry.getKey(), 0);
-                series.add(new HourChartView.DeviceSeries(
-                        (String) val[1], (String) val[0], (long[]) val[2], cIdx));
-            }
-
-            // 把颜色同步给 bucket.devices，让 DeviceBreakdownView 配色一致
-            for (UsageChartView.DeviceUsage du : bucket.devices) {
-                Integer c = deviceColor.get(du.deviceId);
-                if (c != null) du.colorIndex = c;
-            }
-
-            long displayTotal = bucket.totalMs > 0 ? bucket.totalMs : 0L;
-            runOnUiThread(() -> {
-                hourChart.setDeviceHours(series, null);
-                // 刷新设备列表（colorIndex 已更新）
-                deviceBreakdown.setData(longLabel(bucket.date), bucket.devices);
-                if (hourCardSubtitle != null) {
-                    if (displayTotal <= 0L) hourCardSubtitle.setText(longLabel(bucket.date) + " · 该日暂无时段数据");
-                    else hourCardSubtitle.setText(longLabel(bucket.date) + " · 合计 " + formatDuration(displayTotal));
-                }
-            });
         }).start();
+    }
+
+    private void renderHourRows(UsageChartView.DayBucket bucket, JSONArray rows, int token) {
+        if (bucket == null || rows == null) return;
+        // device_id -> [source(String), alias(String), hours(long[24])]
+        java.util.LinkedHashMap<String, Object[]> deviceMap = new java.util.LinkedHashMap<>();
+        try {
+            for (int i = 0; i < rows.length(); i++) {
+                JSONObject row = rows.getJSONObject(i);
+                String deviceId = row.optString("deviceId", "");
+                String source   = row.optString("source", "");
+                String alias    = row.optString("deviceAlias", "");
+                if (alias.isEmpty()) alias = deviceId.length() >= 8 ? deviceId.substring(0, 8) : deviceId;
+                int hour = Math.max(0, Math.min(23, row.optInt("hour", 0)));
+                long ms  = row.optLong("durationMs", 0L);
+                if (!deviceMap.containsKey(deviceId)) {
+                    deviceMap.put(deviceId, new Object[]{source, alias, new long[24]});
+                }
+                ((long[]) deviceMap.get(deviceId)[2])[hour] += ms;
+            }
+        } catch (Exception ignore) {
+            return;
+        }
+
+        // 按设备序号分配颜色（每台设备独立一色，不再区分 source）
+        java.util.Map<String, Integer> deviceColor = new java.util.LinkedHashMap<>();
+        int deviceSeq = 0;
+        for (String devId : deviceMap.keySet()) {
+            deviceColor.put(devId, deviceSeq % HourChartView.LINE_COLORS.length);
+            deviceSeq++;
+        }
+
+        List<HourChartView.DeviceSeries> series = new ArrayList<>();
+        for (java.util.Map.Entry<String, Object[]> entry : deviceMap.entrySet()) {
+            Object[] val = entry.getValue();
+            int cIdx = deviceColor.getOrDefault(entry.getKey(), 0);
+            series.add(new HourChartView.DeviceSeries(
+                    (String) val[1], (String) val[0], (long[]) val[2], cIdx));
+        }
+
+        // 把颜色同步给 bucket.devices，让 DeviceBreakdownView 配色一致
+        for (UsageChartView.DeviceUsage du : bucket.devices) {
+            Integer c = deviceColor.get(du.deviceId);
+            if (c != null) du.colorIndex = c;
+        }
+
+        long displayTotal = bucket.totalMs > 0 ? bucket.totalMs : 0L;
+        runOnUiThread(() -> {
+            if (token != hourLoadToken || !bucket.date.equals(selectedDay)) return;
+            hourChart.setDeviceHours(series, null);
+            // 刷新设备列表（colorIndex 已更新）
+            deviceBreakdown.setData(longLabel(bucket.date), bucket.devices);
+            if (hourCardSubtitle != null) {
+                if (displayTotal <= 0L) hourCardSubtitle.setText("该日暂无时段数据");
+                else hourCardSubtitle.setText("合计 " + formatDuration(displayTotal));
+            }
+        });
     }
 
     private void refreshDeviceCard(UsageChartView.DayBucket bucket) {
@@ -968,6 +1015,48 @@ public class MainActivity extends android.app.Activity {
         }).start();
     }
 
+    /**
+     * 专用于上传操作的异步执行器。
+     * 使用 {@link #uploadingNow} 互斥锁，防止与「进入 app 自动上传」等后台操作并发，
+     * 避免同时发出多个写请求导致 D1 API 错误。
+     */
+    private void runAsyncUpload(Task task) {
+        if (!uploadingNow.compareAndSet(false, true)) {
+            showStatus("上传中，请稍候…", false);
+            return;
+        }
+        showStatus("执行中...", false);
+        new Thread(() -> {
+            String message;
+            boolean error = false;
+            try {
+                message = task.run();
+            } catch (Exception e) {
+                message = e.getMessage();
+                error = true;
+            } finally {
+                uploadingNow.set(false);
+            }
+            String finalMsg = message;
+            boolean finalErr = error;
+            runOnUiThread(() -> {
+                showStatus(finalMsg == null ? "" : finalMsg, finalErr);
+                refreshTodayCard();
+            });
+        }).start();
+    }
+
+    private void loadRecentChartQuietly() {
+        new Thread(() -> {
+            try {
+                loadRecentChart();
+            } catch (Exception e) {
+                String msg = e.getMessage() == null ? "切换失败" : e.getMessage();
+                runOnUiThread(() -> showStatus(msg, true));
+            }
+        }).start();
+    }
+
     private void showStatus(String text, boolean error) {
         statusBar.setText(text == null ? "" : text);
         statusBar.setTextColor(error ? COLOR_DANGER : COLOR_TEXT_SECONDARY);
@@ -979,7 +1068,7 @@ public class MainActivity extends android.app.Activity {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setBackgroundResource(getResources().getIdentifier("card_bg", "drawable", getPackageName()));
-        card.setPadding(dp(16), dp(16), dp(16), dp(16));
+        card.setPadding(dp(8), dp(16), dp(8), dp(16));
         return card;
     }
 

@@ -21,23 +21,31 @@
 			"id":	"0x01000004"
 		}, {
 			"type":	"string",
-			"name":	"perm_bundle_active_reason",
+			"name":	"perm_background_reason",
 			"id":	"0x01000005"
 		}, {
 			"type":	"string",
-			"name":	"perm_internet_reason",
+			"name":	"perm_bundle_active_reason",
 			"id":	"0x01000006"
 		}, {
 			"type":	"string",
-			"name":	"perm_network_reason",
+			"name":	"perm_internet_reason",
 			"id":	"0x01000007"
+		}, {
+			"type":	"string",
+			"name":	"perm_network_reason",
+			"id":	"0x01000008"
+		}, {
+			"type":	"string",
+			"name":	"upload_worker_desc",
+			"id":	"0x01000009"
 		}, {
 			"type":	"color",
 			"name":	"start_window_background",
-			"id":	"0x01000008"
+			"id":	"0x0100000A"
 		}, {
 			"type":	"profile",
 			"name":	"main_pages",
-			"id":	"0x01000009"
+			"id":	"0x0100000B"
 		}]
 }

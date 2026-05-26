@@ -194,8 +194,8 @@ public final class UsageChartView extends View {
 
     private void selectByX(float x) {
         if (days.isEmpty()) return;
-        float padding = 14f * density;
-        float yAxisLabelWidth = 34f * density;
+        float padding = 0f;
+        float yAxisLabelWidth = 18f * density;
         float chartLeft = padding + yAxisLabelWidth;
         float chartRight = getWidth() - padding;
         float cell = (chartRight - chartLeft) / days.size();
@@ -221,11 +221,11 @@ public final class UsageChartView extends View {
             return;
         }
 
-        float padding = 14f * density;
+        float padding = 0f;
         float labelHeight = 22f * density;
         float tooltipHeight = 22f * density;
         // 左侧预留 Y 轴标签区
-        float yAxisLabelWidth = 34f * density;
+        float yAxisLabelWidth = 18f * density;
         float chartLeft = padding + yAxisLabelWidth;
         float chartRight = width - padding;
         float chartTop = padding + tooltipHeight + 8f * density;

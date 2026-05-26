@@ -14,7 +14,7 @@ const DEFAULT_SETTINGS = {
   cloudflareApiToken: "",
   deviceId: "",
   deviceAlias: "",
-  appVersion: "1.3.2"
+  appVersion: "1.3.3"
 };
 
 const DISPLAY_TIME_ZONE = "Asia/Shanghai";
@@ -492,22 +492,47 @@ async function uploadPendingDays(options = {}) {
   return { uploaded: uploadedCount, attempted: dates.length };
 }
 
+function dashboardDbKey(settings) {
+  return `${settings.accountId || ""}|${settings.databaseId || ""}`;
+}
+
+function recentCacheKey(settings, days, from, to) {
+  return `recent:${dashboardDbKey(settings)}:${days}:${from}:${to}`;
+}
+
+function dayDetailCacheKey(settings, date) {
+  return `detail:${dashboardDbKey(settings)}:${date}`;
+}
+
+async function getDashboardCache(key) {
+  const { usageDashboardCache = {} } = await chrome.storage.local.get("usageDashboardCache");
+  return usageDashboardCache[key] || null;
+}
+
+async function putDashboardCache(key, value) {
+  const { usageDashboardCache = {} } = await chrome.storage.local.get("usageDashboardCache");
+  usageDashboardCache[key] = { ...value, cachedAt: Date.now() };
+  await chrome.storage.local.set({ usageDashboardCache });
+}
+
 async function getRecentUsage(rangeDays) {
   const days = Math.max(1, Math.min(366, Math.floor(rangeDays) || 7));
   const settings = await getSettings();
-  if (!settings.accountId || !settings.databaseId || !settings.cloudflareApiToken) {
-    return { ok: false, error: "missing settings", database: getDatabaseLabel(settings), rangeDays: days, days: [] };
-  }
-
-  const schema = await ensureD1Schema(settings);
-  if (!schema.ok) {
-    return { ok: false, error: schema.error, database: getDatabaseLabel(settings), rangeDays: days, days: [] };
-  }
-
   const to = formatDateInTimeZone(new Date(), DISPLAY_TIME_ZONE);
   const fromDate = new Date();
   fromDate.setDate(fromDate.getDate() - (days - 1));
   const from = formatDateInTimeZone(fromDate, DISPLAY_TIME_ZONE);
+  const cacheKey = recentCacheKey(settings, days, from, to);
+  if (!settings.accountId || !settings.databaseId || !settings.cloudflareApiToken) {
+    return await getDashboardCache(cacheKey)
+      || { ok: false, error: "missing settings", database: getDatabaseLabel(settings), rangeDays: days, days: [] };
+  }
+
+  const schema = await ensureD1Schema(settings);
+  if (!schema.ok) {
+    return await getDashboardCache(cacheKey)
+      || { ok: false, error: schema.error, database: getDatabaseLabel(settings), rangeDays: days, days: [] };
+  }
 
   const result = await queryD1(settings, {
     sql: `
@@ -526,7 +551,8 @@ async function getRecentUsage(rangeDays) {
   });
 
   if (!result.ok) {
-    return { ok: false, error: result.error, database: getDatabaseLabel(settings), rangeDays: days, days: [] };
+    return await getDashboardCache(cacheKey)
+      || { ok: false, error: result.error, database: getDatabaseLabel(settings), rangeDays: days, days: [] };
   }
 
   const byDate = new Map();
@@ -561,7 +587,9 @@ async function getRecentUsage(rangeDays) {
     output.push(byDate.get(key) || { date: key, totalMs: 0, latestUploadedAt: "", devices: [] });
   }
 
-  return { ok: true, database: getDatabaseLabel(settings), rangeDays: days, days: output };
+  const response = { ok: true, database: getDatabaseLabel(settings), rangeDays: days, days: output };
+  await putDashboardCache(cacheKey, response);
+  return response;
 }
 
 /**
@@ -574,12 +602,13 @@ async function getRecentUsage(rangeDays) {
  */
 async function getDayDetail(date) {
   const settings = await getSettings();
+  const cacheKey = dayDetailCacheKey(settings, date);
   if (!date) return { ok: false, error: "missing date" };
   if (!settings.accountId || !settings.databaseId || !settings.cloudflareApiToken) {
-    return { ok: false, error: "missing settings" };
+    return await getDashboardCache(cacheKey) || { ok: false, error: "missing settings" };
   }
   const schema = await ensureD1Schema(settings);
-  if (!schema.ok) return { ok: false, error: schema.error };
+  if (!schema.ok) return await getDashboardCache(cacheKey) || { ok: false, error: schema.error };
 
   const dailyResp = await queryD1(settings, {
     sql: `
@@ -595,7 +624,7 @@ async function getDayDetail(date) {
     `,
     params: [date]
   });
-  if (!dailyResp.ok) return { ok: false, error: dailyResp.error };
+  if (!dailyResp.ok) return await getDashboardCache(cacheKey) || { ok: false, error: dailyResp.error };
 
   const hoursResp = await queryD1(settings, {
     sql: `
@@ -605,7 +634,7 @@ async function getDayDetail(date) {
     `,
     params: [date]
   });
-  if (!hoursResp.ok) return { ok: false, error: hoursResp.error };
+  if (!hoursResp.ok) return await getDashboardCache(cacheKey) || { ok: false, error: hoursResp.error };
 
   const devices = dailyResp.rows.map(row => {
     const sourceTag = String(row.source || "").toLowerCase();
@@ -643,7 +672,7 @@ async function getDayDetail(date) {
     hoursByDevice[id].hours[hour].durationMs += ms;
   }
 
-  return {
+  const response = {
     ok: true,
     date,
     totalMs: devices.reduce((s, d) => s + d.totalMs, 0),
@@ -651,6 +680,8 @@ async function getDayDetail(date) {
     hours: hoursTotal,
     hoursByDevice
   };
+  await putDashboardCache(cacheKey, response);
+  return response;
 }
 
 async function testD1Connection() {

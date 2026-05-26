@@ -7,10 +7,10 @@
 		"icon": "$media:app_icon",
 		"label": "$string:app_name",
 		"apiReleaseType": "Release",
-		"compileSdkVersion": "6.0.0.47",
-		"targetAPIVersion": 20,
-		"minAPIVersion": 20,
-		"compileSdkType": "OpenHarmony",
+		"compileSdkVersion": "6.1.0.105",
+		"targetAPIVersion": 60100023,
+		"minAPIVersion": 60100023,
+		"compileSdkType": "HarmonyOS",
 		"targetMinorAPIVersion": 0,
 		"targetPatchAPIVersion": 0,
 		"appEnvironments": [],
@@ -24,7 +24,7 @@
 		"description": "$string:module_desc",
 		"mainElement": "EntryAbility",
 		"deviceTypes": [
-			"default"
+			"phone"
 		],
 		"deliveryWithInstall": true,
 		"installationFree": false,
@@ -51,17 +51,16 @@
 				]
 			}
 		],
-		"requestPermissions": [
+		"extensionAbilities": [
 			{
-				"name": "ohos.permission.BUNDLE_ACTIVE_INFO",
-				"reason": "$string:perm_bundle_active_reason",
-				"usedScene": {
-					"abilities": [
-						"EntryAbility"
-					],
-					"when": "always"
-				}
-			},
+				"name": "UploadWorkerAbility",
+				"srcEntry": "./ets/workability/UploadWorkerAbility.ets",
+				"label": "$string:EntryAbility_label",
+				"description": "$string:upload_worker_desc",
+				"type": "workScheduler"
+			}
+		],
+		"requestPermissions": [
 			{
 				"name": "ohos.permission.INTERNET",
 				"reason": "$string:perm_internet_reason"

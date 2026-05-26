@@ -24,10 +24,13 @@ interface Index_Params {
     message?: string;
     permGranted?: boolean;
     usageSupported?: boolean;
+    backfilling?: boolean;
+    backfillResult?: string;
 }
 import abilityAccessCtrl from "@ohos:abilityAccessCtrl";
 import type common from "@ohos:app.ability.common";
-import type { Permissions, PermissionRequestResult } from "@ohos:abilityAccessCtrl";
+import type { Permissions } from "@ohos:abilityAccessCtrl";
+import type { PermissionRequestResult } from "@ohos:abilityAccessCtrl";
 import router from "@ohos:router";
 import { SettingsStore } from "@bundle:com.example.biliusage/entry/ets/common/SettingsStore";
 import { UsageCollector } from "@bundle:com.example.biliusage/entry/ets/services/UsageCollector";
@@ -106,6 +109,8 @@ class Index extends ViewPU {
         this.__message = new ObservedPropertySimplePU('', this, "message");
         this.__permGranted = new ObservedPropertySimplePU(false, this, "permGranted");
         this.__usageSupported = new ObservedPropertySimplePU(false, this, "usageSupported");
+        this.__backfilling = new ObservedPropertySimplePU(false, this, "backfilling");
+        this.__backfillResult = new ObservedPropertySimplePU('', this, "backfillResult");
         this.setInitiallyProvidedValue(params);
         this.finalizeConstruction();
     }
@@ -137,6 +142,12 @@ class Index extends ViewPU {
         if (params.usageSupported !== undefined) {
             this.usageSupported = params.usageSupported;
         }
+        if (params.backfilling !== undefined) {
+            this.backfilling = params.backfilling;
+        }
+        if (params.backfillResult !== undefined) {
+            this.backfillResult = params.backfillResult;
+        }
     }
     updateStateVars(params: Index_Params) {
     }
@@ -150,6 +161,8 @@ class Index extends ViewPU {
         this.__message.purgeDependencyOnElmtId(rmElmtId);
         this.__permGranted.purgeDependencyOnElmtId(rmElmtId);
         this.__usageSupported.purgeDependencyOnElmtId(rmElmtId);
+        this.__backfilling.purgeDependencyOnElmtId(rmElmtId);
+        this.__backfillResult.purgeDependencyOnElmtId(rmElmtId);
     }
     aboutToBeDeleted() {
         this.__todayLocal.aboutToBeDeleted();
@@ -161,6 +174,8 @@ class Index extends ViewPU {
         this.__message.aboutToBeDeleted();
         this.__permGranted.aboutToBeDeleted();
         this.__usageSupported.aboutToBeDeleted();
+        this.__backfilling.aboutToBeDeleted();
+        this.__backfillResult.aboutToBeDeleted();
         SubscriberManager.Get().delete(this.id__());
         this.aboutToBeDeletedInternal();
     }
@@ -227,6 +242,20 @@ class Index extends ViewPU {
     set usageSupported(newValue: boolean) {
         this.__usageSupported.set(newValue);
     }
+    private __backfilling: ObservedPropertySimplePU<boolean>;
+    get backfilling() {
+        return this.__backfilling.get();
+    }
+    set backfilling(newValue: boolean) {
+        this.__backfilling.set(newValue);
+    }
+    private __backfillResult: ObservedPropertySimplePU<string>;
+    get backfillResult() {
+        return this.__backfillResult.get();
+    }
+    set backfillResult(newValue: string) {
+        this.__backfillResult.set(newValue);
+    }
     async aboutToAppear(): Promise<void> {
         await this.refresh();
     }
@@ -242,7 +271,7 @@ class Index extends ViewPU {
                 const ok = await this.ensurePermission(ctx);
                 this.permGranted = ok;
                 if (!ok) {
-                    this.message = '请在系统设置中授予「应用使用记录」权限后再回来';
+                    this.message = '请在系统设置 → 隐私 → 应用使用记录 中授予本应用权限后再回来';
                     return;
                 }
             }
@@ -288,14 +317,50 @@ class Index extends ViewPU {
     }
     private async ensurePermission(ctx: common.UIAbilityContext): Promise<boolean> {
         const am = abilityAccessCtrl.createAtManager();
-        const perm: Permissions = 'ohos.permission.BUNDLE_ACTIVE_INFO';
+        const perms: Permissions[] = [
+            'ohos.permission.BUNDLE_ACTIVE_INFO',
+            'ohos.permission.KEEP_BACKGROUND_RUNNING'
+        ];
         try {
-            const result: PermissionRequestResult = await am.requestPermissionsFromUser(ctx, [perm]);
+            const result: PermissionRequestResult = await am.requestPermissionsFromUser(ctx, perms);
             const code = result.authResults && result.authResults.length > 0 ? result.authResults[0] : -1;
             return code === 0;
         }
         catch (_e) {
             return false;
+        }
+    }
+    /** 手动补传最近 N 天历史数据（对应安卓端 DailyUploadReceiver.upload 手动入口） */
+    private async backfill(days: number): Promise<void> {
+        if (this.backfilling)
+            return;
+        this.backfilling = true;
+        this.backfillResult = '补传中…';
+        try {
+            const ctx = getContext(this) as common.UIAbilityContext;
+            const s = await SettingsStore.get(ctx);
+            if (!s.accountId || !s.databaseId || !s.apiToken) {
+                this.backfillResult = 'D1 未配置，请先填写设置';
+                return;
+            }
+            const client = new D1Client(s);
+            await client.ensureSchema();
+            const payloads = await UsageCollector.collectRecentForUpload(days, false);
+            let uploaded = 0;
+            for (const day of payloads) {
+                const r = await client.uploadDay(day);
+                if (r.ok)
+                    uploaded++;
+            }
+            this.backfillResult = `补传完成：已上传 ${uploaded} 天`;
+            // 刷新云端列表
+            this.cloudDays = await client.queryRecent(7);
+        }
+        catch (e) {
+            this.backfillResult = '补传失败：' + String((e as Error).message || e);
+        }
+        finally {
+            this.backfilling = false;
         }
     }
     initialRender() {
@@ -466,7 +531,7 @@ class Index extends ViewPU {
                         days: this.recentDays,
                         selectedDate: this.selectedDate,
                         onSelect: (date: string): void => { this.selectedDate = date; }
-                    }, undefined, elmtId, () => { }, { page: "entry/src/main/ets/pages/Index.ets", line: 200, col: 11 });
+                    }, undefined, elmtId, () => { }, { page: "entry/src/main/ets/pages/Index.ets", line: 235, col: 11 });
                     ViewPU.create(componentCall);
                     let paramsLambda = () => {
                         return {
@@ -521,7 +586,7 @@ class Index extends ViewPU {
         {
             this.observeComponentCreation2((elmtId, isInitialRender) => {
                 if (isInitialRender) {
-                    let componentCall = new HourChart(this, { hours: this.selectedHourArr() }, undefined, elmtId, () => { }, { page: "entry/src/main/ets/pages/Index.ets", line: 217, col: 11 });
+                    let componentCall = new HourChart(this, { hours: this.selectedHourArr() }, undefined, elmtId, () => { }, { page: "entry/src/main/ets/pages/Index.ets", line: 252, col: 11 });
                     ViewPU.create(componentCall);
                     let paramsLambda = () => {
                         return {
@@ -615,6 +680,88 @@ class Index extends ViewPU {
         }, If);
         If.pop();
         // 云端设备列表
+        Column.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            // 历史补传区（对应安卓 DailyUploadReceiver 手动入口）
+            Column.create();
+            // 历史补传区（对应安卓 DailyUploadReceiver 手动入口）
+            Column.padding(16);
+            // 历史补传区（对应安卓 DailyUploadReceiver 手动入口）
+            Column.width('100%');
+            // 历史补传区（对应安卓 DailyUploadReceiver 手动入口）
+            Column.alignItems(HorizontalAlign.Start);
+            // 历史补传区（对应安卓 DailyUploadReceiver 手动入口）
+            Column.backgroundColor('#FAFAFA');
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('历史数据补传');
+            Text.fontSize(13);
+            Text.fontWeight(700);
+            Text.fontColor(INK);
+            Text.margin({ bottom: 8 });
+        }, Text);
+        Text.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('手动补传最近 N 天的使用记录到 D1（仅上传有数据的日期，不会覆盖其它设备记录）');
+            Text.fontSize(11);
+            Text.fontColor(INK_SOFT);
+            Text.margin({ bottom: 10 });
+        }, Text);
+        Text.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Row.create();
+            Row.width('100%');
+        }, Row);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Button.createWithLabel(this.backfilling ? '补传中…' : '补传 7 天');
+            Button.fontSize(12);
+            Button.height(32);
+            Button.type(ButtonType.Capsule);
+            Button.backgroundColor(this.backfilling ? '#CCC' : PINK);
+            Button.margin({ right: 8 });
+            Button.onClick(() => this.backfill(7));
+        }, Button);
+        Button.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Button.createWithLabel(this.backfilling ? '补传中…' : '补传 30 天');
+            Button.fontSize(12);
+            Button.height(32);
+            Button.type(ButtonType.Capsule);
+            Button.backgroundColor(this.backfilling ? '#CCC' : PINK_DEEP);
+            Button.margin({ right: 8 });
+            Button.onClick(() => this.backfill(30));
+        }, Button);
+        Button.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Button.createWithLabel(this.backfilling ? '补传中…' : '补传 180 天');
+            Button.fontSize(12);
+            Button.height(32);
+            Button.type(ButtonType.Capsule);
+            Button.backgroundColor(this.backfilling ? '#CCC' : '#555');
+            Button.onClick(() => this.backfill(180));
+        }, Button);
+        Button.pop();
+        Row.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            If.create();
+            if (this.backfillResult) {
+                this.ifElseBranchUpdateFunction(0, () => {
+                    this.observeComponentCreation2((elmtId, isInitialRender) => {
+                        Text.create(this.backfillResult);
+                        Text.fontSize(12);
+                        Text.fontColor(this.backfillResult.indexOf('失败') >= 0 ? '#E45378' : '#34C759');
+                        Text.margin({ top: 8 });
+                    }, Text);
+                    Text.pop();
+                });
+            }
+            else {
+                this.ifElseBranchUpdateFunction(1, () => {
+                });
+            }
+        }, If);
+        If.pop();
+        // 历史补传区（对应安卓 DailyUploadReceiver 手动入口）
         Column.pop();
         Column.pop();
         Scroll.pop();

@@ -1,12 +1,15 @@
 import { AbilityConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import UploadWorkerAbility from '../workability/UploadWorkerAbility';
 
 const DOMAIN = 0x0000;
 
 export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     hilog.info(DOMAIN, 'BiliUsage', '%{public}s', 'Ability onCreate');
+    // 注册每日定时后台上传任务（类比安卓 BootReceiver + AlarmManager）
+    UploadWorkerAbility.registerDailyWork();
   }
 
   onDestroy(): void {

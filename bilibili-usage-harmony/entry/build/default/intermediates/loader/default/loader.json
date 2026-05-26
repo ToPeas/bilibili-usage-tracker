@@ -11,12 +11,15 @@
   "hspNameOhmMap": {},
   "harNameOhmMap": {},
   "packageManagerType": "ohpm",
-  "compileEntry": [],
+  "compileEntry": [
+    "/Users/peiqixin/work/b-zhan/bilibili-usage-harmony/entry/build/default/generated/r/default/ResourceTable.ts"
+  ],
   "otherCompileFiles": [],
   "dynamicImportLibInfo": {},
   "routerMap": [],
   "hspResourcesMap": {},
   "updateVersionInfo": {},
+  "customizedHar": false,
   "anBuildOutPut": "/Users/peiqixin/work/b-zhan/bilibili-usage-harmony/entry/build/default/intermediates/loader_out/default/an/arm64-v8a",
   "anBuildMode": "type",
   "patchConfig": {
